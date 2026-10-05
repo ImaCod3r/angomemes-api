@@ -1,9 +1,14 @@
 import { createApp } from './app.js';
+import { env } from './config/env.js';
+import { sequelize } from './db/index.js';
+import { GoogleAuthVerifier } from './services/google/GoogleAuthVerifier.js';
 
-const port = Number(process.env.PORT ?? 3000);
+await sequelize.authenticate();
 
-const app = createApp();
+const app = createApp({
+  googleVerifier: new GoogleAuthVerifier(env.GOOGLE_CLIENT_ID),
+});
 
-app.listen(port, () => {
-  console.log(`Servidor a correr em http://localhost:${port}`);
+app.listen(env.PORT, () => {
+  console.log(`Servidor a correr em http://localhost:${env.PORT}`);
 });

@@ -1,0 +1,28 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(4000),
+  DATABASE_URL: z.string().min(1),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET deve ter pelo menos 32 caracteres'),
+  GOOGLE_CLIENT_ID: z.string().min(1),
+  // Lista separada por vírgulas; quem entrar com um destes emails fica admin.
+  ADMIN_EMAILS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  FRONTEND_URL: z.url(),
+});
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  throw new Error(`Variáveis de ambiente inválidas:\n${z.prettifyError(parsed.error)}`);
+}
+
+export const env = parsed.data;
