@@ -27,6 +27,8 @@ export interface StorageService {
   upload(input: UploadInput): Promise<StoredFile>;
   destroy(file: FileRef & { visibility: 'public' | 'private' }): Promise<void>;
   fileUrl(file: FileRef): string;
+  /** URL que obriga o browser a descarregar, com o nome de ficheiro indicado (sem extensão). */
+  downloadUrl(file: FileRef, filename: string): string;
   thumbnailUrl(file: FileRef & { durationMs: number | null }): string;
 }
 

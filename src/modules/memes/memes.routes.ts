@@ -7,7 +7,8 @@ import { uploadRateLimit } from '../../middlewares/rateLimit.js';
 import { uploadMemeFile } from '../../middlewares/upload.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
 import { toMemeDto, toUploadedMemeDto } from './meme.dto.js';
-import type { MemesService } from './memes.service.js';
+import { memeNotFound, type MemesService } from './memes.service.js';
+import { MEME_SLUG_MAX, MEME_SLUG_PATTERN } from './slug.js';
 import { MAX_TAGS_PER_MEME, TAG_MAX_LENGTH } from './tags.js';
 
 const MAX_PAGE_SIZE = 50;
@@ -41,6 +42,12 @@ const uploadBody = z.object({
   ),
 });
 
+/** Um slug com formato impossível nunca existe: 404 sem ir à base. */
+function parseMemeSlug(slug: string | undefined): string {
+  if (!slug || slug.length > MEME_SLUG_MAX || !MEME_SLUG_PATTERN.test(slug)) throw memeNotFound();
+  return slug;
+}
+
 export function createMemesRouter(deps: { memesService: MemesService; storage: StorageService }) {
   const { memesService, storage } = deps;
   const router = Router();
@@ -49,6 +56,17 @@ export function createMemesRouter(deps: { memesService: MemesService; storage: S
     const query = listQuery.parse(req.query);
     const page = await memesService.listPublished(query);
     res.json({ ...page, items: page.items.map((meme) => toMemeDto(meme, storage)) });
+  });
+
+  router.get('/:slug', async (req, res) => {
+    const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug));
+    res.json({ meme: toMemeDto(meme, storage) });
+  });
+
+  router.get('/:slug/download', async (req, res) => {
+    const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug));
+    const ref = { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
+    res.redirect(302, storage.downloadUrl(ref, meme.slug));
   });
 
   router.post('/', requireAuth, uploadRateLimit, uploadMemeFile, async (req, res) => {

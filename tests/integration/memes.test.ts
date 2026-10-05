@@ -33,4 +33,13 @@ describe('memes', () => {
       expect(res.status, `page=${page}`).toBe(400);
     }
   });
+
+  it('GET /memes/:slug com slug de formato impossível devolve 404 sem tocar na base', async () => {
+    const paths = ['/memes/Ya_Mano', '/memes/-ya-mano', '/memes/ya--mano/download', `/memes/${'a'.repeat(91)}`];
+    for (const path of paths) {
+      const res = await request(app).get(path);
+      expect(res.status, path).toBe(404);
+      expect(res.body.error.code, path).toBe('MEME_NOT_FOUND');
+    }
+  });
 });

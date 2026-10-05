@@ -26,6 +26,10 @@ export class InMemoryStorageService implements StorageService {
     return `https://storage.test/${file.resourceType}/${file.publicId}.${file.format}`;
   }
 
+  downloadUrl(file: FileRef, filename: string): string {
+    return `${this.fileUrl(file)}?download=${filename}`;
+  }
+
   thumbnailUrl(file: FileRef): string {
     return `https://storage.test/${file.resourceType}/${file.publicId}.jpg`;
   }

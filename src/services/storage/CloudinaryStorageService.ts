@@ -67,6 +67,15 @@ export class CloudinaryStorageService implements StorageService {
     });
   }
 
+  downloadUrl(file: FileRef, filename: string): string {
+    return cloudinary.url(file.publicId, {
+      resource_type: file.resourceType,
+      type: 'upload',
+      format: file.format,
+      flags: `attachment:${filename}`,
+    });
+  }
+
   thumbnailUrl(file: FileRef & { durationMs: number | null }): string {
     if (file.resourceType === 'image') {
       // Imagem: a própria imagem reduzida; a original só carrega ao abrir o meme.

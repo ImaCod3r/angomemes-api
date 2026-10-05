@@ -1,16 +1,10 @@
+import { slugify } from './slug.js';
+
 export const MAX_TAGS_PER_MEME = 8;
 export const TAG_MAX_LENGTH = 40;
 
-/** Minúsculas, sem acentos, só letras, números e hífenes: "Kuduro Ñice!" → "kuduro-nice". */
 export function slugifyTag(raw: string): string {
-  return raw
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, TAG_MAX_LENGTH)
-    .replace(/-+$/, '');
+  return slugify(raw, TAG_MAX_LENGTH);
 }
 
 /** Normaliza e remove repetidas (pelo slug). Tags sem nenhuma letra ou número são ignoradas. */

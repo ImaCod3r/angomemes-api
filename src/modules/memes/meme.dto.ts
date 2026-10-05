@@ -10,6 +10,7 @@ export function toMemeDto(meme: Meme, storage: StorageService) {
   const ref = { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
   return {
     id: meme.id,
+    slug: meme.slug,
     type: meme.type,
     title: meme.title,
     tags: tagsDto(meme),
@@ -29,6 +30,7 @@ export function toUploadedMemeDto(meme: Meme, storage: StorageService) {
   }
   return {
     id: meme.id,
+    slug: meme.slug,
     type: meme.type,
     title: meme.title,
     tags: tagsDto(meme),

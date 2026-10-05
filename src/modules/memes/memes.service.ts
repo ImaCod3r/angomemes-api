@@ -1,9 +1,10 @@
-import { literal, Op, type WhereOptions } from 'sequelize';
+import { literal, Op, type Transaction, UniqueConstraintError, type WhereOptions } from 'sequelize';
 import { Meme, MemeTag, sequelize, Tag, type User } from '../../db/index.js';
 import type { MemeType } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
 import { StorageRejectedError, type StorageService } from '../../services/storage/StorageService.js';
 import { acceptedFormatsMessage, detectFormat, MEME_TYPE_RULES, tooLargeMessage } from './memeTypes.js';
+import { memeSlugBase, pickFreeSlug } from './slug.js';
 import { MAX_TAGS_PER_MEME, normalizeTags, slugifyTag } from './tags.js';
 
 export interface ListPublishedQuery {
@@ -32,11 +33,32 @@ export interface UploadMemeInput {
 
 export interface MemesService {
   listPublished(query: ListPublishedQuery): Promise<Page<Meme>>;
+  /** Um meme publicado; qualquer outro estado dá 404, como se não existisse. */
+  getPublishedBySlug(slug: string): Promise<Meme>;
   upload(input: UploadMemeInput): Promise<Meme>;
 }
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&');
+}
+
+/** Tentativas quando dois envios com o mesmo título escolhem o mesmo slug ao mesmo tempo. */
+const SLUG_ATTEMPTS = 3;
+
+/** Primeiro slug livre para o título; conta com todos os estados, porque o slug é único na tabela. */
+async function freeSlugFor(title: string, transaction: Transaction): Promise<string> {
+  const base = memeSlugBase(title);
+  // A base só tem [a-z0-9-], por isso não há % nem _ a escapar no LIKE.
+  const rows = await Meme.findAll({
+    attributes: ['slug'],
+    where: { [Op.or]: [{ slug: base }, { slug: { [Op.like]: `${base}-%` } }] },
+    transaction,
+  });
+  return pickFreeSlug(base, rows.map((row) => row.slug));
+}
+
+export function memeNotFound(): AppError {
+  return new AppError(404, 'MEME_NOT_FOUND', 'Meme não encontrado.');
 }
 
 export function createMemesService(deps: { storage: StorageService }): MemesService {
@@ -71,6 +93,16 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       });
 
       return { items: rows, page, limit, total: count, hasMore: page * limit < count };
+    },
+
+    async getPublishedBySlug(slug) {
+      const meme = await Meme.findOne({
+        where: { slug, status: 'published' },
+        include: [{ model: Tag, as: 'tags', through: { attributes: [] } }],
+        order: [[{ model: Tag, as: 'tags' }, 'name', 'ASC']],
+      });
+      if (!meme) throw memeNotFound();
+      return meme;
     },
 
     async upload({ user, type, title, tagNames, file }) {
@@ -110,8 +142,8 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
         throw err;
       }
 
-      try {
-        return await sequelize.transaction(async (transaction) => {
+      const save = () =>
+        sequelize.transaction(async (transaction) => {
           // As tags novas criam-se na hora; as que já existem ficam como estão.
           await Tag.bulkCreate(tags, { ignoreDuplicates: true, transaction });
           const tagRows = await Tag.findAll({
@@ -124,6 +156,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
             {
               type,
               title,
+              slug: await freeSlugFor(title, transaction),
               status: isAdmin ? 'published' : 'pending',
               publicId: stored.publicId,
               resourceType: rule.resourceType,
@@ -145,6 +178,15 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
           meme.tags = tagRows;
           return meme;
         });
+
+      try {
+        for (let attempt = 1; ; attempt++) {
+          try {
+            return await save();
+          } catch (err) {
+            if (!(err instanceof UniqueConstraintError) || attempt >= SLUG_ATTEMPTS) throw err;
+          }
+        }
       } catch (err) {
         // Sem registo na base, o ficheiro ficaria órfão no Cloudinary a gastar quota.
         await storage

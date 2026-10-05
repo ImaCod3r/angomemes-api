@@ -21,6 +21,8 @@ export class Meme extends Model<InferAttributes<Meme>, InferCreationAttributes<M
   declare id: CreationOptional<string>;
   declare type: MemeType;
   declare title: string;
+  /** Fixo depois de criado: editar o título não parte os links partilhados. */
+  declare slug: string;
   declare status: MemeStatus;
   declare publicId: string;
   declare resourceType: ResourceType;
@@ -45,6 +47,7 @@ export function initMeme(sequelize: Sequelize) {
       id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
       type: { type: DataTypes.STRING(16), allowNull: false, validate: { isIn: [MEME_TYPES] } },
       title: { type: DataTypes.STRING(120), allowNull: false },
+      slug: { type: DataTypes.STRING(90), allowNull: false, unique: true },
       status: { type: DataTypes.STRING(16), allowNull: false, validate: { isIn: [MEME_STATUSES] } },
       publicId: { type: DataTypes.STRING, allowNull: false },
       resourceType: { type: DataTypes.STRING(16), allowNull: false },
