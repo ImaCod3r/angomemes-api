@@ -17,6 +17,10 @@ const envSchema = z.object({
         .filter(Boolean),
     ),
   FRONTEND_URL: z.url(),
+  // Lido também diretamente pelo SDK do Cloudinary.
+  CLOUDINARY_URL: z
+    .string()
+    .regex(/^cloudinary:\/\/[^:]+:[^@]+@.+$/, 'formato: cloudinary://<api_key>:<api_secret>@<cloud_name>'),
 });
 
 const parsed = envSchema.safeParse(process.env);

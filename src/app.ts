@@ -7,10 +7,14 @@ import { loadSession } from './middlewares/auth.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { createMemesRouter } from './modules/memes/memes.routes.js';
+import { createMemesService } from './modules/memes/memes.service.js';
 import type { GoogleVerifier } from './services/google/GoogleVerifier.js';
+import type { StorageService } from './services/storage/StorageService.js';
 
 export interface AppDeps {
   googleVerifier: GoogleVerifier;
+  storage: StorageService;
 }
 
 export function createApp(deps: AppDeps) {
@@ -32,6 +36,9 @@ export function createApp(deps: AppDeps) {
     adminEmails: env.ADMIN_EMAILS,
   });
   app.use('/auth', createAuthRouter({ authService }));
+
+  const memesService = createMemesService({ storage: deps.storage });
+  app.use('/memes', createMemesRouter({ memesService, storage: deps.storage }));
 
   app.use(notFound);
   app.use(errorHandler);

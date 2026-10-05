@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import { MulterError } from 'multer';
 import { z, ZodError } from 'zod';
 import { AppError } from '../errors.js';
 
@@ -14,6 +15,17 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 
   if (err instanceof ZodError) {
     res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: z.prettifyError(err) } });
+    return;
+  }
+
+  if (err instanceof MulterError) {
+    const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+    res.status(tooLarge ? 413 : 400).json({
+      error: {
+        code: tooLarge ? 'FILE_TOO_LARGE' : 'INVALID_UPLOAD',
+        message: tooLarge ? 'Ficheiro demasiado grande.' : 'Envio inválido: só um ficheiro, no campo "file".',
+      },
+    });
     return;
   }
 

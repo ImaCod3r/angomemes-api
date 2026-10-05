@@ -10,6 +10,7 @@ export default defineConfig({
       GOOGLE_CLIENT_ID: 'test-client-id',
       ADMIN_EMAILS: 'admin@example.com',
       FRONTEND_URL: 'http://localhost:3000',
+      CLOUDINARY_URL: 'cloudinary://test-key:test-secret@test-cloud',
     },
   },
 });

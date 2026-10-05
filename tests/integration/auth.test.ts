@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { SESSION_COOKIE } from '../../src/modules/auth/session.js';
 import { FakeGoogleVerifier } from '../../src/services/google/FakeGoogleVerifier.js';
+import { InMemoryStorageService } from '../../src/services/storage/InMemoryStorageService.js';
 
-const app = createApp({ googleVerifier: new FakeGoogleVerifier() });
+const app = createApp({
+  googleVerifier: new FakeGoogleVerifier(),
+  storage: new InMemoryStorageService(),
+});
 
 function sessionCookie(res: request.Response): string | undefined {
   const cookies = ([] as string[]).concat(res.headers['set-cookie'] ?? []);
