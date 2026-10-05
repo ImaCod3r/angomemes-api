@@ -50,7 +50,7 @@ export const uploadMemeFile = multer({
   limits: { files: 1, fileSize: MAX_UPLOAD_BYTES, fields: 20, fieldSize: 10 * 1024 },
   fileFilter(req, _file, cb) {
     if (!isMemeType(req.body?.type)) {
-      cb(new AppError(400, 'TYPE_REQUIRED', 'O campo "type" (video, gif ou audio) tem de vir antes do ficheiro.'));
+      cb(new AppError(400, 'TYPE_REQUIRED', 'O campo "type" (video, image ou audio) tem de vir antes do ficheiro.'));
       return;
     }
     cb(null, true);

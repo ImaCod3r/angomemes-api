@@ -21,11 +21,12 @@ export const MEME_TYPE_RULES: Record<MemeType, MemeTypeRule> = {
     cloudinaryFormats: ['mp4', 'webm'],
     maxBytes: 50 * MB,
   },
-  gif: {
-    label: 'GIF',
+  image: {
+    label: 'imagem',
     resourceType: 'image',
-    detectedExts: ['gif'],
-    cloudinaryFormats: ['gif'],
+    // GIF não é aceite: as imagens são estáticas.
+    detectedExts: ['jpg', 'png', 'webp'],
+    cloudinaryFormats: ['jpg', 'png', 'webp'],
     maxBytes: 10 * MB,
   },
   audio: {

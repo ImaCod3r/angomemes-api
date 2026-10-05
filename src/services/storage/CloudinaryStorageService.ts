@@ -69,11 +69,11 @@ export class CloudinaryStorageService implements StorageService {
 
   thumbnailUrl(file: FileRef & { durationMs: number | null }): string {
     if (file.resourceType === 'image') {
-      // GIF: só o primeiro fotograma; a animação carrega ao abrir o meme.
+      // Imagem: a própria imagem reduzida; a original só carrega ao abrir o meme.
       return cloudinary.url(file.publicId, {
         resource_type: 'image',
         format: 'jpg',
-        transformation: [{ page: 1, width: THUMB_WIDTH, crop: 'scale' }],
+        transformation: [{ width: THUMB_WIDTH, crop: 'limit' }],
       });
     }
     // Vídeo: fotograma por volta do 1.º segundo (ou o primeiro, se for mais curto).

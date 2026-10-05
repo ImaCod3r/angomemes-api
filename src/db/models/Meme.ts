@@ -9,7 +9,7 @@ import {
 } from 'sequelize';
 import type { Tag } from './Tag.js';
 
-export const MEME_TYPES = ['video', 'gif', 'audio'] as const;
+export const MEME_TYPES = ['video', 'image', 'audio'] as const;
 export type MemeType = (typeof MEME_TYPES)[number];
 
 export const MEME_STATUSES = ['pending', 'published', 'rejected', 'removed'] as const;

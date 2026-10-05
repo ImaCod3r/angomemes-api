@@ -32,9 +32,17 @@ describe('upload: validações antes de enviar para o storage', () => {
     );
   });
 
-  it('GIF enviado como vídeo é recusado', async () => {
+  it('imagem enviada como vídeo é recusada', async () => {
     await expectRejected(
-      service.upload({ user, type: 'video', title: 'Teste', tagNames: ['kuduro'], file: fixtures.gif }),
+      service.upload({ user, type: 'video', title: 'Teste', tagNames: ['kuduro'], file: fixtures.jpg }),
+      415,
+      'UNSUPPORTED_FORMAT',
+    );
+  });
+
+  it('GIF é recusado como imagem', async () => {
+    await expectRejected(
+      service.upload({ user, type: 'image', title: 'Teste', tagNames: ['kuduro'], file: fixtures.gif }),
       415,
       'UNSUPPORTED_FORMAT',
     );
@@ -51,7 +59,7 @@ describe('upload: validações antes de enviar para o storage', () => {
 
   it('tags que ficam vazias depois de normalizadas são recusadas', async () => {
     await expectRejected(
-      service.upload({ user, type: 'gif', title: 'Teste', tagNames: ['!!!'], file: fixtures.gif }),
+      service.upload({ user, type: 'image', title: 'Teste', tagNames: ['!!!'], file: fixtures.jpg }),
       400,
       'TAGS_REQUIRED',
     );
@@ -60,7 +68,7 @@ describe('upload: validações antes de enviar para o storage', () => {
   it('mais de 8 tags é recusado', async () => {
     const tagNames = Array.from({ length: 9 }, (_, i) => `tag${i}`);
     await expectRejected(
-      service.upload({ user, type: 'gif', title: 'Teste', tagNames, file: fixtures.gif }),
+      service.upload({ user, type: 'image', title: 'Teste', tagNames, file: fixtures.jpg }),
       400,
       'TOO_MANY_TAGS',
     );

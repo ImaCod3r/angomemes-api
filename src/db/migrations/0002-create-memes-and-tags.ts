@@ -42,7 +42,7 @@ export const up: MigrationFn<QueryInterface> = async ({ context: qi }) => {
     type: 'check',
     name: 'memes_type_check',
     fields: ['type'],
-    where: { type: ['video', 'gif', 'audio'] },
+    where: { type: ['video', 'image', 'audio'] },
   });
   await qi.addConstraint('memes', {
     type: 'check',

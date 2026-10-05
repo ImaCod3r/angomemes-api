@@ -12,10 +12,10 @@ describe('memes', () => {
   it('POST /memes sem sessão devolve 401 e não guarda nada', async () => {
     const res = await request(app)
       .post('/memes')
-      .field('type', 'gif')
+      .field('type', 'image')
       .field('title', 'Teste')
       .field('tags[]', 'kuduro')
-      .attach('file', fixtures.gif, 'meme.gif');
+      .attach('file', fixtures.jpg, 'meme.jpg');
 
     expect(res.status).toBe(401);
     expect(storage.files.size).toBe(0);
