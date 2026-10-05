@@ -42,6 +42,27 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&');
 }
 
+/** Normaliza as tags e garante entre 1 e o máximo por meme. */
+export function validatedTags(tagNames: string[]): { slug: string; name: string }[] {
+  const tags = normalizeTags(tagNames);
+  if (tags.length === 0) {
+    throw new AppError(400, 'TAGS_REQUIRED', 'Indica pelo menos 1 tag.');
+  }
+  if (tags.length > MAX_TAGS_PER_MEME) {
+    throw new AppError(400, 'TOO_MANY_TAGS', `No máximo ${MAX_TAGS_PER_MEME} tags por meme.`);
+  }
+  return tags;
+}
+
+/** As tags novas criam-se na hora; as que já existem ficam como estão. */
+export async function upsertTags(
+  tags: { slug: string; name: string }[],
+  transaction: Transaction,
+): Promise<Tag[]> {
+  await Tag.bulkCreate(tags, { ignoreDuplicates: true, transaction });
+  return Tag.findAll({ where: { slug: tags.map((t) => t.slug) }, order: [['name', 'ASC']], transaction });
+}
+
 /** Tentativas quando dois envios com o mesmo título escolhem o mesmo slug ao mesmo tempo. */
 const SLUG_ATTEMPTS = 3;
 
@@ -109,13 +130,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       const rule = MEME_TYPE_RULES[type];
 
       // Tudo o que pode falhar é validado antes do upload, para não gastar quota do Cloudinary.
-      const tags = normalizeTags(tagNames);
-      if (tags.length === 0) {
-        throw new AppError(400, 'TAGS_REQUIRED', 'Indica pelo menos 1 tag.');
-      }
-      if (tags.length > MAX_TAGS_PER_MEME) {
-        throw new AppError(400, 'TOO_MANY_TAGS', `No máximo ${MAX_TAGS_PER_MEME} tags por meme.`);
-      }
+      const tags = validatedTags(tagNames);
       if (file.length > rule.maxBytes) {
         throw new AppError(413, 'FILE_TOO_LARGE', tooLargeMessage(type));
       }
@@ -144,13 +159,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
 
       const save = () =>
         sequelize.transaction(async (transaction) => {
-          // As tags novas criam-se na hora; as que já existem ficam como estão.
-          await Tag.bulkCreate(tags, { ignoreDuplicates: true, transaction });
-          const tagRows = await Tag.findAll({
-            where: { slug: tags.map((t) => t.slug) },
-            order: [['name', 'ASC']],
-            transaction,
-          });
+          const tagRows = await upsertTags(tags, transaction);
 
           const meme = await Meme.create(
             {

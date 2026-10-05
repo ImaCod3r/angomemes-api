@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import { env } from './config/env.js';
 import { loadSession } from './middlewares/auth.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
+import { createAdminRouter } from './modules/admin/admin.routes.js';
+import { createAdminService } from './modules/admin/admin.service.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import { createMemesRouter } from './modules/memes/memes.routes.js';
@@ -39,6 +41,9 @@ export function createApp(deps: AppDeps) {
 
   const memesService = createMemesService({ storage: deps.storage });
   app.use('/memes', createMemesRouter({ memesService, storage: deps.storage }));
+
+  const adminService = createAdminService({ storage: deps.storage });
+  app.use('/admin', createAdminRouter({ adminService, storage: deps.storage }));
 
   app.use(notFound);
   app.use(errorHandler);

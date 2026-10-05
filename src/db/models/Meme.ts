@@ -8,6 +8,7 @@ import {
   type Sequelize,
 } from 'sequelize';
 import type { Tag } from './Tag.js';
+import type { User } from './User.js';
 
 export const MEME_TYPES = ['video', 'image', 'audio'] as const;
 export type MemeType = (typeof MEME_TYPES)[number];
@@ -39,6 +40,7 @@ export class Meme extends Model<InferAttributes<Meme>, InferCreationAttributes<M
   declare createdAt: CreationOptional<Date>;
 
   declare tags?: NonAttribute<Tag[]>;
+  declare uploader?: NonAttribute<User>;
 }
 
 export function initMeme(sequelize: Sequelize) {

@@ -5,9 +5,13 @@ import {
   type StorageService,
   type StoredFile,
   type UploadInput,
+  type Visibility,
 } from './StorageService.js';
 
 const THUMB_WIDTH = 480;
+const PRIVATE_URL_TTL_SECONDS = 60 * 60;
+
+const deliveryType = (visibility: Visibility) => (visibility === 'public' ? 'upload' : 'authenticated');
 
 /** Lê as credenciais de CLOUDINARY_URL (o SDK trata disso sozinho). */
 export class CloudinaryStorageService implements StorageService {
@@ -64,6 +68,26 @@ export class CloudinaryStorageService implements StorageService {
       resource_type: file.resourceType,
       type: 'upload',
       format: file.format,
+    });
+  }
+
+  async setVisibility(file: FileRef, from: Visibility, to: Visibility): Promise<void> {
+    if (from === to) return;
+    // Mesmo public_id, outro tipo de entrega: o ficheiro não volta a ser enviado.
+    await cloudinary.uploader.rename(file.publicId, file.publicId, {
+      resource_type: file.resourceType,
+      type: deliveryType(from),
+      to_type: deliveryType(to),
+      invalidate: true,
+    });
+  }
+
+  privateUrl(file: FileRef): string {
+    // URL de descarga privada da API, que expira; não depende do plano ter token auth.
+    return cloudinary.utils.private_download_url(file.publicId, file.format, {
+      resource_type: file.resourceType,
+      type: 'authenticated',
+      expires_at: Math.floor(Date.now() / 1000) + PRIVATE_URL_TTL_SECONDS,
     });
   }
 
