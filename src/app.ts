@@ -7,6 +7,7 @@ import { loadSession } from './middlewares/auth.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import { createAdminRouter } from './modules/admin/admin.routes.js';
 import { createAdminService } from './modules/admin/admin.service.js';
+import { createUsersService } from './modules/admin/users.service.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import { createMemesRouter } from './modules/memes/memes.routes.js';
@@ -43,7 +44,8 @@ export function createApp(deps: AppDeps) {
   app.use('/memes', createMemesRouter({ memesService, storage: deps.storage }));
 
   const adminService = createAdminService({ storage: deps.storage });
-  app.use('/admin', createAdminRouter({ adminService, storage: deps.storage }));
+  const usersService = createUsersService({ adminEmails: env.ADMIN_EMAILS });
+  app.use('/admin', createAdminRouter({ adminService, usersService, storage: deps.storage }));
 
   app.use(notFound);
   app.use(errorHandler);

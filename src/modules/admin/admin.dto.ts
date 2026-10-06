@@ -1,4 +1,5 @@
 import type { Meme } from '../../db/index.js';
+import type { UserWithUploads } from './users.service.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
 import { visibilityOf } from '../memes/memeStatus.js';
 
@@ -31,5 +32,19 @@ export function toAdminMemeDto(meme: Meme, storage: StorageService) {
     createdAt: meme.createdAt,
     reviewedAt: meme.reviewedAt,
     publishedAt: meme.publishedAt,
+  };
+}
+
+export function toAdminUserDto(user: UserWithUploads, lockedAdmin: boolean) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    /** Admin por ADMIN_EMAILS: o painel não deixa despromover. */
+    lockedAdmin,
+    uploadsCount: user.uploadsCount,
+    createdAt: user.createdAt,
   };
 }

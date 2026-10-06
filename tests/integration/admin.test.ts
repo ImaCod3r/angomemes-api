@@ -6,6 +6,7 @@ import type { Meme, User } from '../../src/db/index.js';
 import { errorHandler } from '../../src/middlewares/errorHandler.js';
 import { createAdminRouter } from '../../src/modules/admin/admin.routes.js';
 import type { AdminService } from '../../src/modules/admin/admin.service.js';
+import type { UsersService } from '../../src/modules/admin/users.service.js';
 import { FakeGoogleVerifier } from '../../src/services/google/FakeGoogleVerifier.js';
 import { InMemoryStorageService } from '../../src/services/storage/InMemoryStorageService.js';
 
@@ -35,17 +36,26 @@ function stubService(): AdminService {
   };
 }
 
+function stubUsers(): UsersService {
+  return {
+    list: vi.fn(),
+    counts: vi.fn(),
+    setRole: vi.fn(),
+    isLockedAdmin: vi.fn().mockReturnValue(false),
+  };
+}
+
 /** O router de admin com um utilizador já "na sessão", sem base de dados. */
-function appAs(role: 'user' | 'admin' | null, service = stubService()) {
+function appAs(role: 'user' | 'admin' | null, service = stubService(), users = stubUsers()) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
     if (role) req.user = { id: 'u1', role } as User;
     next();
   });
-  app.use('/admin', createAdminRouter({ adminService: service, storage: new InMemoryStorageService() }));
+  app.use('/admin', createAdminRouter({ adminService: service, usersService: users, storage: new InMemoryStorageService() }));
   app.use(errorHandler);
-  return { app, service };
+  return { app, service, users };
 }
 
 describe('admin', () => {
@@ -64,12 +74,22 @@ describe('admin', () => {
       request(app).post(`/admin/memes/${ID}/approve`).send({}),
       request(app).post(`/admin/memes/${ID}/reject`).send({ reason: 'x' }),
       request(app).delete(`/admin/memes/${ID}`),
+      request(app).get('/admin/stats'),
+      request(app).get('/admin/users'),
+      request(app).patch(`/admin/users/${ID}`).send({ role: 'admin' }),
     ];
     for (const res of await Promise.all(calls)) {
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('FORBIDDEN');
     }
     for (const fn of Object.values(service)) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('mudar role com valor desconhecido devolve 400', async () => {
+    const { app, users } = appAs('admin');
+    const res = await request(app).patch(`/admin/users/${ID}`).send({ role: 'superadmin' });
+    expect(res.status).toBe(400);
+    expect(users.setRole).not.toHaveBeenCalled();
   });
 
   it('id que não é UUID devolve 404', async () => {
