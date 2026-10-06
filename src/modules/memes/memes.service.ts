@@ -1,4 +1,12 @@
-import { literal, Op, type Order, type Transaction, UniqueConstraintError, type WhereOptions } from 'sequelize';
+import {
+  literal,
+  Op,
+  type Order,
+  QueryTypes,
+  type Transaction,
+  UniqueConstraintError,
+  type WhereOptions,
+} from 'sequelize';
 import { Meme, MemeTag, sequelize, Tag, User } from '../../db/index.js';
 import type { MemeType } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
@@ -40,6 +48,11 @@ export interface MemesService {
   /** Um meme publicado; qualquer outro estado dá 404, como se não existisse. */
   /** Inclui quem enviou (só os campos públicos). */
   getPublishedBySlug(slug: string): Promise<Meme>;
+  getPublishedById(id: string): Promise<Meme>;
+  /** Um meme publicado ao acaso (opcionalmente de um tipo e/ou tag); null se não houver nenhum. */
+  randomPublished(filter: { type?: MemeType; tag?: string }): Promise<Meme | null>;
+  /** Tags com pelo menos 1 meme publicado, com a contagem, as mais usadas primeiro. */
+  listPublicTags(): Promise<{ slug: string; name: string; memesCount: number }[]>;
   /** Conta uma descarga; nunca falha o pedido de descarga por causa disto. */
   countDownload(meme: Meme): Promise<void>;
   upload(input: UploadMemeInput): Promise<Meme>;
@@ -85,6 +98,13 @@ async function freeSlugFor(title: string, transaction: Transaction): Promise<str
   return pickFreeSlug(base, rows.map((row) => row.slug));
 }
 
+/** Subconsulta em vez de filtrar o include, para cada meme continuar a trazer todas as tags. */
+function publishedWithTag(tag: string) {
+  return literal(
+    `"Meme"."id" IN (SELECT mt.meme_id FROM meme_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.slug = ${sequelize.escape(slugifyTag(tag))})`,
+  );
+}
+
 export function memeNotFound(): AppError {
   return new AppError(404, 'MEME_NOT_FOUND', 'Meme não encontrado.');
 }
@@ -98,14 +118,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       const conditions: WhereOptions<Meme>[] = [{ status: 'published' }];
       if (type) conditions.push({ type });
       if (q) conditions.push({ title: { [Op.iLike]: `%${escapeLike(q)}%` } });
-      if (tag) {
-        // Subconsulta em vez de filtrar o include, para cada meme continuar a trazer todas as tags.
-        conditions.push(
-          literal(
-            `"Meme"."id" IN (SELECT mt.meme_id FROM meme_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.slug = ${sequelize.escape(slugifyTag(tag))})`,
-          ),
-        );
-      }
+      if (tag) conditions.push(publishedWithTag(tag));
 
       const { rows, count } = await Meme.findAndCountAll({
         where: { [Op.and]: conditions },
@@ -117,6 +130,42 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       });
 
       return { items: rows, page, limit, total: count, hasMore: page * limit < count };
+    },
+
+    async getPublishedById(id) {
+      const meme = await Meme.findOne({
+        where: { id, status: 'published' },
+        include: [{ model: Tag, as: 'tags', through: { attributes: [] } }],
+        order: [[{ model: Tag, as: 'tags' }, 'name', 'ASC']],
+      });
+      if (!meme) throw memeNotFound();
+      return meme;
+    },
+
+    async randomPublished({ type, tag }) {
+      const conditions: WhereOptions<Meme>[] = [{ status: 'published' }];
+      if (type) conditions.push({ type });
+      if (tag) conditions.push(publishedWithTag(tag));
+      // Primeiro só o id (ORDER BY random() numa tabela pequena), depois o meme com as tags.
+      const picked = await Meme.findOne({
+        attributes: ['id'],
+        where: { [Op.and]: conditions },
+        order: literal('random()'),
+      });
+      return picked ? this.getPublishedById(picked.id) : null;
+    },
+
+    async listPublicTags() {
+      const rows = await sequelize.query<{ slug: string; name: string; memes_count: string }>(
+        `SELECT t.slug, t.name, COUNT(*) AS memes_count
+           FROM tags t
+           JOIN meme_tags mt ON mt.tag_id = t.id
+           JOIN memes m ON m.id = mt.meme_id AND m.status = 'published'
+          GROUP BY t.id
+          ORDER BY COUNT(*) DESC, t.name ASC`,
+        { type: QueryTypes.SELECT },
+      );
+      return rows.map((row) => ({ slug: row.slug, name: row.name, memesCount: Number(row.memes_count) }));
     },
 
     async countDownload(meme) {
