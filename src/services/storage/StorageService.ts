@@ -32,6 +32,8 @@ export interface StorageService {
   /** URL que obriga o browser a descarregar, com o nome de ficheiro indicado (sem extensão). */
   downloadUrl(file: FileRef, filename: string): string;
   thumbnailUrl(file: FileRef & { durationMs: number | null }): string;
+  /** Só vídeos: excerto curto, pequeno e sem som, para pré-visualizar na listagem como um GIF. */
+  hoverPreviewUrl(file: FileRef): string;
   /** Passa o ficheiro entre público (CDN) e privado, sem o reenviar, e limpa a cache da CDN. */
   setVisibility(file: FileRef, from: Visibility, to: Visibility): Promise<void>;
   /** URL temporário para ver um ficheiro privado; só se entrega a administradores. */

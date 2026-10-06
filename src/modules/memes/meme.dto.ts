@@ -16,6 +16,7 @@ export function toMemeDto(meme: Meme, storage: StorageService) {
     tags: tagsDto(meme),
     fileUrl: storage.fileUrl(ref),
     thumbUrl: meme.type === 'audio' ? null : storage.thumbnailUrl({ ...ref, durationMs: meme.durationMs }),
+    previewUrl: meme.type === 'video' ? storage.hoverPreviewUrl(ref) : null,
     durationMs: meme.durationMs,
     width: meme.width,
     height: meme.height,

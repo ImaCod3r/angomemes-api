@@ -9,6 +9,8 @@ import {
 } from './StorageService.js';
 
 const THUMB_WIDTH = 480;
+/** Segundos do excerto de pré-visualização dos vídeos. */
+const HOVER_PREVIEW_SECONDS = 4;
 const PRIVATE_URL_TTL_SECONDS = 60 * 60;
 
 const deliveryType = (visibility: Visibility) => (visibility === 'public' ? 'upload' : 'authenticated');
@@ -96,6 +98,24 @@ export class CloudinaryStorageService implements StorageService {
       type: 'upload',
       format: file.format,
       flags: `attachment:${filename}`,
+    });
+  }
+
+  hoverPreviewUrl(file: FileRef): string {
+    // Gerado pelo Cloudinary no primeiro pedido e depois servido pela CDN; nada é guardado à parte.
+    return cloudinary.url(file.publicId, {
+      resource_type: 'video',
+      format: 'mp4',
+      transformation: [
+        {
+          start_offset: 0,
+          duration: HOVER_PREVIEW_SECONDS,
+          width: THUMB_WIDTH,
+          crop: 'scale',
+          audio_codec: 'none',
+          quality: 'auto:low',
+        },
+      ],
     });
   }
 
