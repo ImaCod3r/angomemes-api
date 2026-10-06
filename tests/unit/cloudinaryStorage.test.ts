@@ -30,3 +30,23 @@ describe('CloudinaryStorageService.hoverPreviewUrl', () => {
     expect(url).toContain('angomemes/test/abc.mp4');
   });
 });
+
+describe('CloudinaryStorageService.downloadUrl com marca d\'água', () => {
+  const storage = new CloudinaryStorageService('angomemes/test');
+  const ref = { publicId: 'angomemes/test/abc', resourceType: 'video' as const, format: 'mp4' };
+
+  it('acrescenta o texto pequeno, semitransparente, no canto inferior direito', () => {
+    const url = storage.downloadUrl(ref, 'ya-mano', { watermark: true });
+
+    expect(url).toContain('l_text:Arial_64_bold_stroke:angomemes');
+    expect(url).toContain('o_70');
+    expect(url).toContain('w_0.18');
+    expect(url).toContain('fl_layer_apply,g_south_east');
+    // A descarga continua a ter o nome certo, depois da marca.
+    expect(url.indexOf('fl_layer_apply')).toBeLessThan(url.indexOf('fl_attachment:ya-mano'));
+  });
+
+  it('sem a opção não há marca', () => {
+    expect(storage.downloadUrl(ref, 'ya-mano')).not.toContain('l_text');
+  });
+});

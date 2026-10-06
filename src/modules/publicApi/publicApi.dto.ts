@@ -1,5 +1,6 @@
 import type { ApiKey, Meme } from '../../db/index.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
+import { hasWatermark } from '../memes/memeTypes.js';
 
 /**
  * Meme na API pública. É um contrato com terceiros: só se acrescentam campos,
@@ -17,7 +18,8 @@ export function toPublicMemeDto(meme: Meme, storage: StorageService, frontendUrl
     fileUrl: storage.fileUrl(ref),
     thumbUrl: meme.type === 'audio' ? null : storage.thumbnailUrl({ ...ref, durationMs: meme.durationMs }),
     previewUrl: meme.type === 'video' ? storage.hoverPreviewUrl(ref) : null,
-    downloadUrl: storage.downloadUrl(ref, meme.slug),
+    // Com a marca d'água, como as descargas feitas no site.
+    downloadUrl: storage.downloadUrl(ref, meme.slug, { watermark: hasWatermark(meme.type) }),
     durationMs: meme.durationMs,
     width: meme.width,
     height: meme.height,

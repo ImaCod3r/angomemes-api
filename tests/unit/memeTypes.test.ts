@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectFormat } from '../../src/modules/memes/memeTypes.js';
+import { detectFormat, hasWatermark } from '../../src/modules/memes/memeTypes.js';
 import { fixtures } from '../fixtures.js';
 
 describe('detectFormat (pelo conteúdo, nunca pela extensão)', () => {
@@ -22,5 +22,13 @@ describe('detectFormat (pelo conteúdo, nunca pela extensão)', () => {
     expect(await detectFormat('image', fixtures.gif)).toBeNull();
     expect(await detectFormat('video', fixtures.mov)).toBeNull();
     expect(await detectFormat('video', fixtures.garbage)).toBeNull();
+  });
+});
+
+describe('hasWatermark', () => {
+  it('vídeos e imagens sim, áudios não', () => {
+    expect(hasWatermark('video')).toBe(true);
+    expect(hasWatermark('image')).toBe(true);
+    expect(hasWatermark('audio')).toBe(false);
   });
 });

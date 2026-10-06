@@ -39,6 +39,11 @@ export const MEME_TYPE_RULES: Record<MemeType, MemeTypeRule> = {
   },
 };
 
+/** Vídeos e imagens descarregados levam a marca d'água; os áudios não. */
+export function hasWatermark(type: MemeType): boolean {
+  return type !== 'audio';
+}
+
 export const MAX_UPLOAD_BYTES = Math.max(...Object.values(MEME_TYPE_RULES).map((r) => r.maxBytes));
 
 export function isMemeType(value: unknown): value is MemeType {

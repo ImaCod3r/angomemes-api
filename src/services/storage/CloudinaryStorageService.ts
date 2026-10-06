@@ -9,6 +9,24 @@ import {
 } from './StorageService.js';
 
 const THUMB_WIDTH = 480;
+/**
+ * Marca d'água das descargas: "angomemes" a branco, semitransparente e com contorno
+ * escuro (lê-se em fundos claros e escuros), no canto inferior direito.
+ * Tamanho relativo: ~18% da largura do meme, a 3% das margens.
+ * Aplicada pelo Cloudinary no URL: o original fica intacto e nada é guardado à parte.
+ */
+const WATERMARK_LAYER = [
+  {
+    overlay: { font_family: 'Arial', font_size: 64, font_weight: 'bold', stroke: 'stroke', text: 'angomemes' },
+    color: '#FFFFFF',
+    border: '4px_solid_rgb:00000099',
+    opacity: 70,
+    width: 0.18,
+    flags: 'relative',
+  },
+  { flags: 'layer_apply', gravity: 'south_east', x: 0.03, y: 0.03 },
+];
+
 /** Segundos do excerto de pré-visualização dos vídeos. */
 const HOVER_PREVIEW_SECONDS = 4;
 const PRIVATE_URL_TTL_SECONDS = 60 * 60;
@@ -92,12 +110,12 @@ export class CloudinaryStorageService implements StorageService {
     });
   }
 
-  downloadUrl(file: FileRef, filename: string): string {
+  downloadUrl(file: FileRef, filename: string, options: { watermark?: boolean } = {}): string {
     return cloudinary.url(file.publicId, {
       resource_type: file.resourceType,
       type: 'upload',
       format: file.format,
-      flags: `attachment:${filename}`,
+      transformation: [...(options.watermark ? WATERMARK_LAYER : []), { flags: `attachment:${filename}` }],
     });
   }
 

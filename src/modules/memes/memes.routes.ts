@@ -7,6 +7,7 @@ import { uploadRateLimit } from '../../middlewares/rateLimit.js';
 import { uploadMemeFile } from '../../middlewares/upload.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
 import { toMemeDetailDto, toMemeDto, toUploadedMemeDto } from './meme.dto.js';
+import { hasWatermark } from './memeTypes.js';
 import { memeNotFound, type MemesService } from './memes.service.js';
 import { MEME_SLUG_MAX, MEME_SLUG_PATTERN } from './slug.js';
 import { MEME_SORTS, RANDOM_SEED_MAX } from './sort.js';
@@ -71,7 +72,7 @@ export function createMemesRouter(deps: { memesService: MemesService; storage: S
     const ref = { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
     // Sem esperar: a descarga não fica à espera da contagem.
     void memesService.countDownload(meme);
-    res.redirect(302, storage.downloadUrl(ref, meme.slug));
+    res.redirect(302, storage.downloadUrl(ref, meme.slug, { watermark: hasWatermark(meme.type) }));
   });
 
   router.post('/', requireAuth, uploadRateLimit, uploadMemeFile, async (req, res) => {

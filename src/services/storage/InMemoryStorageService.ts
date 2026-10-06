@@ -39,8 +39,8 @@ export class InMemoryStorageService implements StorageService {
     return `https://storage.test/${file.resourceType}/${file.publicId}.${file.format}`;
   }
 
-  downloadUrl(file: FileRef, filename: string): string {
-    return `${this.fileUrl(file)}?download=${filename}`;
+  downloadUrl(file: FileRef, filename: string, options: { watermark?: boolean } = {}): string {
+    return `${this.fileUrl(file)}?download=${filename}${options.watermark ? '&watermark=1' : ''}`;
   }
 
   hoverPreviewUrl(file: FileRef): string {

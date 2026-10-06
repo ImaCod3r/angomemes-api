@@ -226,7 +226,8 @@ export function buildOpenApiSpec(serverUrl: string) {
             downloadUrl: {
               type: 'string',
               format: 'uri',
-              description: 'O ficheiro com cabeçalho de descarga (o navegador guarda em vez de abrir).',
+              description:
+                'O ficheiro com cabeçalho de descarga (o navegador guarda em vez de abrir). Vídeos e imagens levam a marca d\'água do Angomemes num canto.',
             },
             durationMs: { type: ['integer', 'null'], description: 'Vídeos e áudios.' },
             width: { type: ['integer', 'null'] },
