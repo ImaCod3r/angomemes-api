@@ -20,6 +20,21 @@ export function toMemeDto(meme: Meme, storage: StorageService) {
     width: meme.width,
     height: meme.height,
     publishedAt: meme.publishedAt,
+    downloadsCount: meme.downloadsCount,
+  };
+}
+
+/**
+ * Página de um meme: o mesmo da listagem e quem o enviou.
+ * Só nome, avatar e se é verificado (administrador); nunca email nem ids internos.
+ */
+export function toMemeDetailDto(meme: Meme, storage: StorageService) {
+  const uploader = meme.uploader;
+  return {
+    ...toMemeDto(meme, storage),
+    uploader: uploader
+      ? { name: uploader.name, avatarUrl: uploader.avatarUrl, verified: uploader.role === 'admin' }
+      : null,
   };
 }
 

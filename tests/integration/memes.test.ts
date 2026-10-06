@@ -27,6 +27,13 @@ describe('memes', () => {
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
+  it('GET /memes com ordenação desconhecida ou semente inválida devolve 400', async () => {
+    for (const qs of ['sort=likes', 'sort=random&seed=-1', 'sort=random&seed=abc', "sort=random&seed=1'--"]) {
+      const res = await request(app).get(`/memes?${qs}`);
+      expect(res.status, qs).toBe(400);
+    }
+  });
+
   it('GET /memes com página inválida devolve 400', async () => {
     for (const page of ['0', '-1', 'abc', '1.5']) {
       const res = await request(app).get(`/memes?page=${page}`);

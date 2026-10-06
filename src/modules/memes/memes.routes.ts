@@ -6,9 +6,10 @@ import { requireAuth } from '../../middlewares/auth.js';
 import { uploadRateLimit } from '../../middlewares/rateLimit.js';
 import { uploadMemeFile } from '../../middlewares/upload.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
-import { toMemeDto, toUploadedMemeDto } from './meme.dto.js';
+import { toMemeDetailDto, toMemeDto, toUploadedMemeDto } from './meme.dto.js';
 import { memeNotFound, type MemesService } from './memes.service.js';
 import { MEME_SLUG_MAX, MEME_SLUG_PATTERN } from './slug.js';
+import { MEME_SORTS, RANDOM_SEED_MAX } from './sort.js';
 import { MAX_TAGS_PER_MEME, TAG_MAX_LENGTH } from './tags.js';
 
 const MAX_PAGE_SIZE = 50;
@@ -19,6 +20,8 @@ const listQuery = z.object({
   type: z.enum(MEME_TYPES).optional(),
   q: z.string().trim().max(100).optional().transform(emptyToUndefined),
   tag: z.string().trim().max(TAG_MAX_LENGTH).optional().transform(emptyToUndefined),
+  sort: z.enum(MEME_SORTS).default('recent'),
+  seed: z.coerce.number().int().min(0).max(RANDOM_SEED_MAX).default(0),
   page: z.coerce.number().int().min(1).default(1),
   // Acima do máximo corta-se em vez de dar erro.
   limit: z.coerce
@@ -60,12 +63,14 @@ export function createMemesRouter(deps: { memesService: MemesService; storage: S
 
   router.get('/:slug', async (req, res) => {
     const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug));
-    res.json({ meme: toMemeDto(meme, storage) });
+    res.json({ meme: toMemeDetailDto(meme, storage) });
   });
 
   router.get('/:slug/download', async (req, res) => {
     const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug));
     const ref = { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
+    // Sem esperar: a descarga não fica à espera da contagem.
+    void memesService.countDownload(meme);
     res.redirect(302, storage.downloadUrl(ref, meme.slug));
   });
 

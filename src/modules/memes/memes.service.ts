@@ -1,16 +1,20 @@
-import { literal, Op, type Transaction, UniqueConstraintError, type WhereOptions } from 'sequelize';
-import { Meme, MemeTag, sequelize, Tag, type User } from '../../db/index.js';
+import { literal, Op, type Order, type Transaction, UniqueConstraintError, type WhereOptions } from 'sequelize';
+import { Meme, MemeTag, sequelize, Tag, User } from '../../db/index.js';
 import type { MemeType } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
 import { StorageRejectedError, type StorageService } from '../../services/storage/StorageService.js';
 import { acceptedFormatsMessage, detectFormat, MEME_TYPE_RULES, tooLargeMessage } from './memeTypes.js';
 import { memeSlugBase, pickFreeSlug } from './slug.js';
+import { type MemeSort, orderFor } from './sort.js';
 import { MAX_TAGS_PER_MEME, normalizeTags, slugifyTag } from './tags.js';
 
 export interface ListPublishedQuery {
   type?: MemeType;
   q?: string;
   tag?: string;
+  sort?: MemeSort;
+  /** Só para `sort: 'random'`. */
+  seed?: number;
   page: number;
   limit: number;
 }
@@ -34,7 +38,10 @@ export interface UploadMemeInput {
 export interface MemesService {
   listPublished(query: ListPublishedQuery): Promise<Page<Meme>>;
   /** Um meme publicado; qualquer outro estado dá 404, como se não existisse. */
+  /** Inclui quem enviou (só os campos públicos). */
   getPublishedBySlug(slug: string): Promise<Meme>;
+  /** Conta uma descarga; nunca falha o pedido de descarga por causa disto. */
+  countDownload(meme: Meme): Promise<void>;
   upload(input: UploadMemeInput): Promise<Meme>;
 }
 
@@ -86,7 +93,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
   const { storage } = deps;
 
   return {
-    async listPublished({ type, q, tag, page, limit }) {
+    async listPublished({ type, q, tag, sort = 'recent', seed = 0, page, limit }) {
       // Só `published`: pendentes, rejeitados e removidos nunca saem daqui.
       const conditions: WhereOptions<Meme>[] = [{ status: 'published' }];
       if (type) conditions.push({ type });
@@ -103,11 +110,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       const { rows, count } = await Meme.findAndCountAll({
         where: { [Op.and]: conditions },
         include: [{ model: Tag, as: 'tags', through: { attributes: [] } }],
-        order: [
-          ['publishedAt', 'DESC'],
-          ['id', 'DESC'],
-          [{ model: Tag, as: 'tags' }, 'name', 'ASC'],
-        ],
+        order: [...(orderFor(sort, seed) as unknown[]), [{ model: Tag, as: 'tags' }, 'name', 'ASC']] as Order,
         limit,
         offset: (page - 1) * limit,
         distinct: true,
@@ -116,10 +119,20 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       return { items: rows, page, limit, total: count, hasMore: page * limit < count };
     },
 
+    async countDownload(meme) {
+      await Meme.increment('downloadsCount', { by: 1, where: { id: meme.id } }).catch((err) =>
+        console.error('Falha ao contar descarga', err),
+      );
+    },
+
     async getPublishedBySlug(slug) {
       const meme = await Meme.findOne({
         where: { slug, status: 'published' },
-        include: [{ model: Tag, as: 'tags', through: { attributes: [] } }],
+        include: [
+          { model: Tag, as: 'tags', through: { attributes: [] } },
+          // Nunca o email: só o que aparece na página pública.
+          { model: User, as: 'uploader', attributes: ['name', 'avatarUrl', 'role'] },
+        ],
         order: [[{ model: Tag, as: 'tags' }, 'name', 'ASC']],
       });
       if (!meme) throw memeNotFound();

@@ -13,7 +13,6 @@ const PRIVATE_URL_TTL_SECONDS = 60 * 60;
 
 const deliveryType = (visibility: Visibility) => (visibility === 'public' ? 'upload' : 'authenticated');
 
-/** Lê as credenciais de CLOUDINARY_URL (o SDK trata disso sozinho). */
 export class CloudinaryStorageService implements StorageService {
   private readonly folder: string;
 
