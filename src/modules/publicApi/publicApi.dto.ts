@@ -24,6 +24,7 @@ export function toPublicMemeDto(meme: Meme, storage: StorageService, frontendUrl
     width: meme.width,
     height: meme.height,
     downloadsCount: meme.downloadsCount,
+    likesCount: meme.likesCount,
     // Para quem usa a API dar crédito com uma ligação de volta ao acervo.
     pageUrl: `${frontendUrl.replace(/\/$/, '')}/memes/${meme.slug}`,
     publishedAt: meme.publishedAt,

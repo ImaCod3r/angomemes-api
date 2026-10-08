@@ -9,8 +9,13 @@ describe('orderFor', () => {
     ]);
   });
 
-  it('populares: descargas primeiro, depois data e id', () => {
-    expect((orderFor('popular', 0) as unknown[][]).map((o) => o[0])).toEqual(['downloadsCount', 'publishedAt', 'id']);
+  it('populares: likes primeiro, depois descargas, data e id', () => {
+    expect((orderFor('popular', 0) as unknown[][]).map((o) => o[0])).toEqual([
+      'likesCount',
+      'downloadsCount',
+      'publishedAt',
+      'id',
+    ]);
   });
 
   it('aleatório: a semente entra no SQL só como inteiro', () => {

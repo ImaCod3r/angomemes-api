@@ -32,6 +32,7 @@ const meme = {
   reviewedBy: 'reviewer-uuid',
   rejectionReason: 'motivo interno',
   downloadsCount: 7,
+  likesCount: 3,
   publishedAt: new Date('2026-10-01T10:00:00Z'),
   tags: [{ slug: 'kuduro', name: 'Kuduro' }],
   uploader: { email: 'pessoa@example.com', name: 'Pessoa' },

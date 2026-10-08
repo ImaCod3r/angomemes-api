@@ -11,6 +11,8 @@ import { createAdminService } from './modules/admin/admin.service.js';
 import { createUsersService } from './modules/admin/users.service.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { createLikesRouter } from './modules/likes/likes.routes.js';
+import { createLikesService } from './modules/likes/likes.service.js';
 import { createMemesRouter } from './modules/memes/memes.routes.js';
 import { createMemesService } from './modules/memes/memes.service.js';
 import { createApiKeysService } from './modules/publicApi/apiKeys.service.js';
@@ -45,6 +47,7 @@ export function createApp(deps: AppDeps) {
 
   const memesService = createMemesService({ storage: deps.storage });
   const apiKeysService = createApiKeysService();
+  const likesService = createLikesService();
 
   // API pública: antes do CORS restrito e da sessão. Tem CORS aberto, sem cookies,
   // e autentica só pela chave.
@@ -77,7 +80,8 @@ export function createApp(deps: AppDeps) {
   app.use('/auth', createAuthRouter({ authService }));
 
   app.use('/me', createMeRouter({ apiKeysService }));
-  app.use('/memes', createMemesRouter({ memesService, storage: deps.storage }));
+  app.use('/memes', createMemesRouter({ memesService, likesService, storage: deps.storage }));
+  app.use('/memes', createLikesRouter({ likesService }));
 
   const adminService = createAdminService({ storage: deps.storage });
   const usersService = createUsersService({ adminEmails: env.ADMIN_EMAILS });

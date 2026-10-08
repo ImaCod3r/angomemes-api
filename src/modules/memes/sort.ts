@@ -15,6 +15,7 @@ export function orderFor(sort: MemeSort, seed: number): Order {
   switch (sort) {
     case 'popular':
       return [
+        ['likesCount', 'DESC'],
         ['downloadsCount', 'DESC'],
         ['publishedAt', 'DESC'],
         ['id', 'DESC'],

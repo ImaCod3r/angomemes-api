@@ -5,8 +5,8 @@ function tagsDto(meme: Meme) {
   return (meme.tags ?? []).map((tag) => ({ slug: tag.slug, name: tag.name }));
 }
 
-/** Meme publicado, como aparece nas listagens. */
-export function toMemeDto(meme: Meme, storage: StorageService) {
+/** Meme publicado, como aparece nas listagens. `likedByMe` é sempre false sem sessão. */
+export function toMemeDto(meme: Meme, storage: StorageService, likedByMe = false) {
   const ref = { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
   return {
     id: meme.id,
@@ -22,6 +22,8 @@ export function toMemeDto(meme: Meme, storage: StorageService) {
     height: meme.height,
     publishedAt: meme.publishedAt,
     downloadsCount: meme.downloadsCount,
+    likesCount: meme.likesCount,
+    likedByMe,
   };
 }
 
@@ -29,10 +31,10 @@ export function toMemeDto(meme: Meme, storage: StorageService) {
  * Página de um meme: o mesmo da listagem e quem o enviou.
  * Só nome, avatar e se é verificado (administrador); nunca email nem ids internos.
  */
-export function toMemeDetailDto(meme: Meme, storage: StorageService) {
+export function toMemeDetailDto(meme: Meme, storage: StorageService, likedByMe = false) {
   const uploader = meme.uploader;
   return {
-    ...toMemeDto(meme, storage),
+    ...toMemeDto(meme, storage, likedByMe),
     uploader: uploader
       ? { name: uploader.name, avatarUrl: uploader.avatarUrl, verified: uploader.role === 'admin' }
       : null,

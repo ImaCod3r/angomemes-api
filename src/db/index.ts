@@ -1,6 +1,7 @@
 import { Sequelize } from 'sequelize';
 import { env } from '../config/env.js';
 import { ApiKey, initApiKey } from './models/ApiKey.js';
+import { initLike, Like } from './models/Like.js';
 import { initMeme, Meme } from './models/Meme.js';
 import { initMemeTag, MemeTag } from './models/MemeTag.js';
 import { initTag, Tag } from './models/Tag.js';
@@ -16,6 +17,7 @@ initTag(sequelize);
 initMeme(sequelize);
 initMemeTag(sequelize);
 initApiKey(sequelize);
+initLike(sequelize);
 
 Meme.belongsTo(User, { as: 'uploader', foreignKey: 'uploadedBy' });
 Meme.belongsToMany(Tag, { through: MemeTag, as: 'tags', foreignKey: 'memeId', otherKey: 'tagId' });
@@ -23,4 +25,4 @@ Tag.belongsToMany(Meme, { through: MemeTag, as: 'memes', foreignKey: 'tagId', ot
 
 ApiKey.belongsTo(User, { as: 'user', foreignKey: 'userId' });
 
-export { ApiKey, Meme, MemeTag, Tag, User };
+export { ApiKey, Like, Meme, MemeTag, Tag, User };

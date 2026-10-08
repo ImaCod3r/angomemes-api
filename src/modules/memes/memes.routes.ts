@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import type { User } from '../../db/index.js';
 import { MEME_TYPES } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
 import { requireAuth } from '../../middlewares/auth.js';
 import { uploadRateLimit } from '../../middlewares/rateLimit.js';
 import { uploadMemeFile } from '../../middlewares/upload.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
+import type { LikesService } from '../likes/likes.service.js';
 import { toMemeDetailDto, toMemeDto, toUploadedMemeDto } from './meme.dto.js';
 import { hasWatermark } from './memeTypes.js';
 import { memeNotFound, type MemesService } from './memes.service.js';
@@ -52,19 +54,30 @@ function parseMemeSlug(slug: string | undefined): string {
   return slug;
 }
 
-export function createMemesRouter(deps: { memesService: MemesService; storage: StorageService }) {
-  const { memesService, storage } = deps;
+export function createMemesRouter(deps: {
+  memesService: MemesService;
+  likesService: LikesService;
+  storage: StorageService;
+}) {
+  const { memesService, likesService, storage } = deps;
   const router = Router();
+
+  /** Com sessão, os memes a que a conta deu like; sem sessão, nenhum. */
+  async function likedBy(user: User | undefined, memeIds: string[]): Promise<Set<string>> {
+    return user ? likesService.likedMemeIds(user.id, memeIds) : new Set();
+  }
 
   router.get('/', async (req, res) => {
     const query = listQuery.parse(req.query);
     const page = await memesService.listPublished(query);
-    res.json({ ...page, items: page.items.map((meme) => toMemeDto(meme, storage)) });
+    const liked = await likedBy(req.user, page.items.map((meme) => meme.id));
+    res.json({ ...page, items: page.items.map((meme) => toMemeDto(meme, storage, liked.has(meme.id))) });
   });
 
   router.get('/:slug', async (req, res) => {
     const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug));
-    res.json({ meme: toMemeDetailDto(meme, storage) });
+    const liked = await likedBy(req.user, [meme.id]);
+    res.json({ meme: toMemeDetailDto(meme, storage, liked.has(meme.id)) });
   });
 
   router.get('/:slug/download', async (req, res) => {

@@ -37,8 +37,10 @@ export class Meme extends Model<InferAttributes<Meme>, InferCreationAttributes<M
   declare reviewedAt: CreationOptional<Date | null>;
   declare rejectionReason: CreationOptional<string | null>;
   declare publishedAt: Date | null;
-  /** Quantas vezes foi descarregado; serve de medida de popularidade enquanto não há likes. */
+  /** Quantas vezes foi descarregado; desempata a ordenação por populares. */
   declare downloadsCount: CreationOptional<number>;
+  /** Quantas contas deram like; atualizado na mesma transação de cada like. */
+  declare likesCount: CreationOptional<number>;
   declare createdAt: CreationOptional<Date>;
 
   declare tags?: NonAttribute<Tag[]>;
@@ -66,6 +68,7 @@ export function initMeme(sequelize: Sequelize) {
       rejectionReason: { type: DataTypes.STRING(300), allowNull: true },
       publishedAt: { type: DataTypes.DATE, allowNull: true },
       downloadsCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+      likesCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
       createdAt: DataTypes.DATE,
     },
     { sequelize, tableName: 'memes', underscored: true, updatedAt: false },
