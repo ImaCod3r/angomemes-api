@@ -85,7 +85,27 @@ export function createMemesRouter(deps: {
 
   const tagsQuery = z.object({ type: z.enum(MEME_TYPES).optional() });
 
-  // Antes de /:slug, senão "tags" seria lido como um slug.
+  // Para o sitemap.xml do frontend: só o necessário de cada meme publicado.
+  router.get('/sitemap', async (_req, res) => {
+    const memes = await memesService.listForSitemap();
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json({
+      items: memes.map((meme) => {
+        const ref = { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
+        return {
+          slug: meme.slug,
+          title: meme.title,
+          type: meme.type,
+          fileUrl: storage.fileUrl(ref),
+          thumbUrl: meme.type === 'audio' ? null : storage.thumbnailUrl({ ...ref, durationMs: meme.durationMs }),
+          durationMs: meme.durationMs,
+          publishedAt: meme.publishedAt,
+        };
+      }),
+    });
+  });
+
+  // Antes de /:slug, senão "tags" e "sitemap" seriam lidos como slugs.
   router.get('/tags', async (req, res) => {
     const { type } = tagsQuery.parse(req.query);
     res.set('Cache-Control', 'public, max-age=60');

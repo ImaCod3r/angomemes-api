@@ -95,6 +95,8 @@ export interface MemesService {
    * as mais usadas primeiro. Em cache durante um minuto.
    */
   listPublicTags(type?: MemeType): Promise<PublicTag[]>;
+  /** Todos os publicados (só os campos do sitemap), os mais recentes primeiro. */
+  listForSitemap(): Promise<Meme[]>;
   /** Conta uma descarga; nunca falha o pedido de descarga por causa disto. */
   countDownload(meme: Meme): Promise<void>;
   upload(input: UploadMemeInput): Promise<Meme>;
@@ -160,6 +162,8 @@ const CLAIMED_TICKET_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 function uploadNotFound(): AppError {
   return new AppError(404, 'UPLOAD_NOT_FOUND', 'Envio não encontrado ou expirado. Envia o ficheiro outra vez.');
 }
+
+const SITEMAP_MAX_URLS = 50_000;
 
 /** As tags mudam pouco e a agregação percorre todas as ligações: guarda-se um minuto. */
 const TAGS_CACHE_MS = 60 * 1000;
@@ -301,6 +305,16 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       tagsCache.set(key, { at: Date.now(), tags });
       tags.catch(() => tagsCache.delete(key));
       return tags;
+    },
+
+    listForSitemap() {
+      return Meme.findAll({
+        attributes: ['id', 'slug', 'title', 'type', 'publicId', 'resourceType', 'format', 'durationMs', 'publishedAt'],
+        where: { status: 'published' },
+        order: [['publishedAt', 'DESC'], ['id', 'DESC']],
+        // O limite de URLs de um sitemap; acima disto, divide-se em vários.
+        limit: SITEMAP_MAX_URLS,
+      });
     },
 
     async countDownload(meme) {

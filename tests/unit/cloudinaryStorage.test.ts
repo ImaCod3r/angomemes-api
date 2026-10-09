@@ -64,6 +64,8 @@ describe('CloudinaryStorageService: URLs assinados e comprimidos', () => {
       storage.hoverPreviewUrl(video),
       storage.thumbnailUrl({ ...image, durationMs: null }),
       storage.thumbnailUrl({ ...video, durationMs: 5000 }),
+      storage.ogImageUrl({ ...image, durationMs: null }),
+      storage.ogImageUrl({ ...video, durationMs: 5000 }),
     ];
     for (const url of urls) expect(url, url).toMatch(/\/s--[A-Za-z0-9_-]{8}--\//);
   });
@@ -79,5 +81,25 @@ describe('CloudinaryStorageService: URLs assinados e comprimidos', () => {
 
   it('displayUrl de um vídeo é o próprio ficheiro', () => {
     expect(storage.displayUrl(video)).toBe(storage.fileUrl(video));
+  });
+});
+
+describe('CloudinaryStorageService.ogImageUrl', () => {
+  const storage = new CloudinaryStorageService('angomemes/test');
+
+  it('1200×630 em JPG, com o meme inteiro (fit/pad) e sem f_auto', () => {
+    const image = storage.ogImageUrl({ publicId: 'angomemes/test/img', resourceType: 'image', format: 'png', durationMs: null });
+    expect(image).toContain('w_1200');
+    expect(image).toContain('h_630');
+    expect(image).toContain('l_angomemes:test:img');
+    expect(image).toContain('c_fit');
+    expect(image).toMatch(/\.jpg/);
+    expect(image).not.toContain('f_auto');
+
+    const video = storage.ogImageUrl({ publicId: 'angomemes/test/vid', resourceType: 'video', format: 'mp4', durationMs: 5000 });
+    expect(video).toContain('/video/upload/');
+    expect(video).toContain('c_pad');
+    expect(video).toContain('so_1');
+    expect(video).toMatch(/vid\.jpg/);
   });
 });

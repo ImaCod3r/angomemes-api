@@ -45,6 +45,15 @@ const SIGNED = { sign_url: true, secure: true } as const;
 
 /** Formato (WebP/AVIF quando o browser aceita) e compressão escolhidos pelo Cloudinary. */
 const AUTO_FORMAT = { fetch_format: 'auto', quality: 'auto' } as const;
+/**
+ * Pré-visualização dos links: 1200×630 (o tamanho que o Facebook, o WhatsApp e o X pedem),
+ * com o meme inteiro sobre um fundo desfocado dele próprio: um vídeo vertical do TikTok
+ * aparece inteiro, sem cortes nem barras pretas. JPG sem `f_auto`: os robôs das redes nem
+ * sempre aceitam WebP.
+ */
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
+
 /** Largura máxima da imagem mostrada na página do meme; o original fica para a descarga. */
 const DISPLAY_WIDTH = 1280;
 
@@ -204,6 +213,37 @@ export class CloudinaryStorageService implements StorageService {
           audio_codec: 'none',
           quality: 'auto:low',
         },
+      ],
+    });
+  }
+
+  ogImageUrl(file: FileRef & { durationMs: number | null }): string {
+    if (file.resourceType === 'image') {
+      // Nas imagens o fundo desfocado faz-se com camadas: a própria imagem a encher e
+      // desfocada, e por cima a imagem inteira.
+      return cloudinary.url(file.publicId, {
+        ...SIGNED,
+        resource_type: 'image',
+        format: 'jpg',
+        transformation: [
+          { width: OG_WIDTH, height: OG_HEIGHT, crop: 'fill', effect: 'blur:2000' },
+          { effect: 'brightness:-15' },
+          // Nas camadas o public_id leva ":" em vez de "/".
+          { overlay: file.publicId.replaceAll('/', ':'), width: OG_WIDTH, height: OG_HEIGHT, crop: 'fit' },
+          { flags: 'layer_apply' },
+          { quality: 'auto:good' },
+        ],
+      });
+    }
+    // Num fotograma de vídeo não há camadas da própria imagem: o fundo é a cor das margens.
+    const startOffset = file.durationMs !== null && file.durationMs > 1000 ? 1 : 0;
+    return cloudinary.url(file.publicId, {
+      ...SIGNED,
+      resource_type: 'video',
+      format: 'jpg',
+      transformation: [
+        { start_offset: startOffset, width: OG_WIDTH, height: OG_HEIGHT, crop: 'pad', background: 'auto' },
+        { quality: 'auto:good' },
       ],
     });
   }

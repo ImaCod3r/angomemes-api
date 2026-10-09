@@ -85,6 +85,10 @@ export class InMemoryStorageService implements StorageService {
     return `https://storage.test/${file.resourceType}/${file.publicId}.preview.mp4`;
   }
 
+  ogImageUrl(file: FileRef): string {
+    return `https://storage.test/${file.resourceType}/${file.publicId}.og.jpg`;
+  }
+
   thumbnailUrl(file: FileRef): string {
     return `https://storage.test/${file.resourceType}/${file.publicId}.jpg`;
   }

@@ -57,6 +57,11 @@ export interface StorageService {
    */
   downloadUrl(file: FileRef, filename: string, options?: { watermark?: boolean }): string;
   thumbnailUrl(file: FileRef & { durationMs: number | null }): string;
+  /**
+   * Imagem de pré-visualização para links partilhados (WhatsApp, Facebook, Google): 1200×630,
+   * JPG, com o meme inteiro sobre um fundo desfocado. Só vídeos e imagens.
+   */
+  ogImageUrl(file: FileRef & { durationMs: number | null }): string;
   /** Só vídeos: excerto curto, pequeno e sem som, para pré-visualizar na listagem como um GIF. */
   hoverPreviewUrl(file: FileRef): string;
   /** Passa o ficheiro entre público (CDN) e privado, sem o reenviar, e limpa a cache da CDN. */

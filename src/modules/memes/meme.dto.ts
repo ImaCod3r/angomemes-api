@@ -19,6 +19,8 @@ export function toMemeDto(meme: Meme, storage: StorageService, likedByMe = false
     displayUrl: meme.type === 'image' ? storage.displayUrl(ref) : null,
     thumbUrl: meme.type === 'audio' ? null : storage.thumbnailUrl({ ...ref, durationMs: meme.durationMs }),
     previewUrl: meme.type === 'video' ? storage.hoverPreviewUrl(ref) : null,
+    /** Pré-visualização dos links partilhados (1200×630). Áudios: o frontend desenha uma. */
+    ogImageUrl: meme.type === 'audio' ? null : storage.ogImageUrl({ ...ref, durationMs: meme.durationMs }),
     durationMs: meme.durationMs,
     width: meme.width,
     height: meme.height,
