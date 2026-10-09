@@ -69,6 +69,7 @@ Todas são validadas no arranque (`src/config/env.ts`): com uma em falta ou mal 
 | `JWT_SECRET` | sim | Assina os cookies de sessão. Mínimo 32 caracteres. Gera com `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Mudá-lo termina todas as sessões. |
 | `GOOGLE_CLIENT_ID` | sim | *Client ID* OAuth do Google; os tokens de login têm de ter este `aud`. |
 | `FRONTEND_URL` | sim | Origem exata do site (ex.: `https://angomemes.site`). Serve para o CORS e para a proteção CSRF. Escreve-a sem `/` no fim. |
+| `COOKIE_DOMAIN` | em produção | Domínio comum ao site e à API (ex.: `angomemes.site`, para `angomemes.site` + `api.angomemes.site`). Sem ele o cookie de sessão fica só no host da API e o Next.js não vê a sessão. Em desenvolvimento fica vazio. |
 | `CLOUDINARY_URL` | sim | `cloudinary://<api_key>:<api_secret>@<cloud_name>`. Nunca a mandes para o frontend. |
 | `ADMIN_EMAILS` | não | Emails separados por vírgulas que ficam administradores ao entrar. Estes não se podem despromover pelo painel. |
 | `NODE_ENV` | não | `development` (por omissão), `test` ou `production`. Em produção os cookies passam a `Secure`, os logs saem em JSON e os ficheiros vão para a pasta `angomemes/production` do Cloudinary. |
@@ -229,13 +230,13 @@ O Node é a versão 22 LTS, fixada por `NIXPACKS_NODE_VERSION`. O `engines` do `
 
 1. Cria o serviço a partir do repositório e define o **diretório raiz** como `backend/`.
 2. Cria (ou liga) uma base PostgreSQL e põe o URL em `DATABASE_URL`.
-3. Define as variáveis: `NODE_ENV=production`, `JWT_SECRET`, `GOOGLE_CLIENT_ID`, `FRONTEND_URL`, `CLOUDINARY_URL` e, se quiseres, `ADMIN_EMAILS`. A `PORT` vem do alojamento.
+3. Define as variáveis: `NODE_ENV=production`, `JWT_SECRET`, `GOOGLE_CLIENT_ID`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `CLOUDINARY_URL` e, se quiseres, `ADMIN_EMAILS`. A `PORT` vem do alojamento.
 4. Configura o *health check* para `GET /health`.
 5. Publica. No arranque correm as migrações em falta e depois a API.
 
 ### Antes de abrir ao público
 
-- **Domínios:** o frontend e a API têm de estar no **mesmo domínio** (ex.: `angomemes.site` e `api.angomemes.site`); senão o browser não manda o cookie de sessão. O `FRONTEND_URL` é a origem exata do site; se o site também abrir em `www.`, redireciona uma versão para a outra.
+- **Domínios:** o frontend e a API têm de estar no **mesmo domínio** (ex.: `angomemes.site` e `api.angomemes.site`); senão o browser não manda o cookie de sessão. Define `COOKIE_DOMAIN` com esse domínio (ex.: `angomemes.site`): sem ele o cookie fica só em `api.angomemes.site` e as páginas renderizadas pelo Next.js não veem a sessão. O `FRONTEND_URL` é a origem exata do site; se o site também abrir em `www.`, redireciona uma versão para a outra.
 - **Cloudinary:** liga **Settings → Security → Strict transformations**.
 - **Google:** junta o domínio de produção às origens autorizadas do *Client ID* e passa o ecrã de consentimento a "Em produção".
 - **Proxy:** confirma o `TRUST_PROXY`. O valor 1 serve para quase todos os alojamentos (um balanceador à frente); com uma CDN como o Cloudflare à frente do balanceador, são 2.
@@ -259,7 +260,7 @@ Num redeploy a API recebe `SIGTERM`: deixa de aceitar ligações, termina os ped
 |---|---|
 | A API não arranca e lista variáveis | O `.env` (ou as variáveis do alojamento) está incompleto; a mensagem diz quais. |
 | `403 FORBIDDEN_ORIGIN` ao enviar ou dar like | O site está numa origem diferente do `FRONTEND_URL` (http/https, `www`, porta). |
-| Login funciona mas a sessão não fica | O frontend e a API estão em domínios diferentes, ou o site está em `http` com `NODE_ENV=production` (cookie `Secure`). |
+| Login funciona mas a sessão não fica | Falta o `COOKIE_DOMAIN`, o frontend e a API estão em domínios diferentes, ou o site está em `http` com `NODE_ENV=production` (cookie `Secure`). |
 | `429` em todos os logins | O `TRUST_PROXY` está mal e toda a gente parece vir do mesmo IP. |
 | Imagens do Cloudinary dão 401 depois de ligar *strict* | Algum URL foi gerado sem assinatura; todos devem vir do `CloudinaryStorageService`. |
 | `permission denied to create extension "pg_trgm"` | O utilizador da base não pode criar extensões: cria-a uma vez com um superutilizador. |

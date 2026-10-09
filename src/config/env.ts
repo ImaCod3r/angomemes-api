@@ -17,6 +17,14 @@ const envSchema = z.object({
         .filter(Boolean),
     ),
   FRONTEND_URL: z.url(),
+  // Domínio do cookie de sessão (ex.: `angomemes.site`). Faz falta quando o site e a API estão
+  // em subdomínios diferentes: sem ele o cookie fica só no host da API e o servidor do Next.js,
+  // que lê os cookies do site, nunca o vê. Vazio: o cookie fica só no host da API.
+  COOKIE_DOMAIN: z
+    .string()
+    .trim()
+    .transform((value) => value.replace(/^\./, '') || undefined)
+    .optional(),
   // Quantos proxies (balanceador, CDN) estão à frente da API. Sem isto, atrás de um proxy
   // todos os pedidos parecem vir do mesmo IP e os limites por IP ficam partilhados.
   // Por omissão: 1 em produção, 0 no resto.

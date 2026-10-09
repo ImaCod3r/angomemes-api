@@ -12,6 +12,7 @@ export const sessionCookieOptions: CookieOptions = {
   secure: env.NODE_ENV === 'production',
   sameSite: 'lax',
   path: '/',
+  domain: env.COOKIE_DOMAIN,
 };
 
 export interface SessionClaims {
