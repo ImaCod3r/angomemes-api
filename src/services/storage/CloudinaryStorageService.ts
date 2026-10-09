@@ -1,7 +1,10 @@
 import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
+import type { ResourceType } from '../../db/models/Meme.js';
 import {
   StorageRejectedError,
+  type DirectUploadInput,
   type FileRef,
+  type SignedUpload,
   type StorageService,
   type StoredFile,
   type UploadInput,
@@ -32,6 +35,18 @@ const HOVER_PREVIEW_SECONDS = 4;
 const PRIVATE_URL_TTL_SECONDS = 60 * 60;
 
 const deliveryType = (visibility: Visibility) => (visibility === 'public' ? 'upload' : 'authenticated');
+
+/**
+ * Todos os URLs públicos vão assinados. Com "Strict transformations" ligado na consola
+ * do Cloudinary, só as transformações geradas aqui são aceites: ninguém gasta créditos
+ * com variantes inventadas a partir de um public_id.
+ */
+const SIGNED = { sign_url: true, secure: true } as const;
+
+/** Formato (WebP/AVIF quando o browser aceita) e compressão escolhidos pelo Cloudinary. */
+const AUTO_FORMAT = { fetch_format: 'auto', quality: 'auto' } as const;
+/** Largura máxima da imagem mostrada na página do meme; o original fica para a descarga. */
+const DISPLAY_WIDTH = 1280;
 
 export class CloudinaryStorageService implements StorageService {
   private readonly folder: string;
@@ -74,6 +89,48 @@ export class CloudinaryStorageService implements StorageService {
     });
   }
 
+  signUpload(input: DirectUploadInput): SignedUpload {
+    const { cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret } = cloudinary.config();
+    // Tudo o que vai aqui fica coberto pela assinatura: o browser não pode mudar o public_id,
+    // a entrega (pendentes ficam privados), os formatos, nem substituir um ficheiro que já
+    // existe (overwrite=false; a assinatura vale 1 hora e não pode servir para trocar um meme aprovado).
+    const publicId = `${this.folder}/${input.name}`;
+    const params = {
+      public_id: publicId,
+      type: deliveryType(input.visibility),
+      allowed_formats: input.allowedFormats.join(','),
+      overwrite: 'false',
+      timestamp: String(Math.floor(Date.now() / 1000)),
+    };
+    const signature = cloudinary.utils.api_sign_request(params, apiSecret!);
+    return {
+      url: `https://api.cloudinary.com/v1_1/${cloudName}/${input.resourceType}/upload`,
+      fields: { ...params, api_key: apiKey!, signature },
+      publicId,
+    };
+  }
+
+  async getUploaded(file: { publicId: string; resourceType: ResourceType; visibility: Visibility }): Promise<StoredFile | null> {
+    let result: { public_id: string; format: string; bytes?: number; width?: number; height?: number; duration?: number };
+    try {
+      result = await cloudinary.api.resource(file.publicId, {
+        resource_type: file.resourceType,
+        type: deliveryType(file.visibility),
+      });
+    } catch (err) {
+      if ((err as { error?: { http_code?: number } }).error?.http_code === 404) return null;
+      throw err;
+    }
+    return {
+      publicId: result.public_id,
+      format: result.format,
+      bytes: result.bytes ?? null,
+      durationMs: typeof result.duration === 'number' ? Math.round(result.duration * 1000) : null,
+      width: result.width ?? null,
+      height: result.height ?? null,
+    };
+  }
+
   async destroy(file: FileRef & { visibility: 'public' | 'private' }): Promise<void> {
     await cloudinary.uploader.destroy(file.publicId, {
       resource_type: file.resourceType,
@@ -84,9 +141,21 @@ export class CloudinaryStorageService implements StorageService {
 
   fileUrl(file: FileRef): string {
     return cloudinary.url(file.publicId, {
+      ...SIGNED,
       resource_type: file.resourceType,
       type: 'upload',
       format: file.format,
+    });
+  }
+
+  displayUrl(file: FileRef): string {
+    if (file.resourceType !== 'image') return this.fileUrl(file);
+    return cloudinary.url(file.publicId, {
+      ...SIGNED,
+      resource_type: 'image',
+      type: 'upload',
+      format: file.format,
+      transformation: [{ width: DISPLAY_WIDTH, crop: 'limit', ...AUTO_FORMAT }],
     });
   }
 
@@ -112,6 +181,7 @@ export class CloudinaryStorageService implements StorageService {
 
   downloadUrl(file: FileRef, filename: string, options: { watermark?: boolean } = {}): string {
     return cloudinary.url(file.publicId, {
+      ...SIGNED,
       resource_type: file.resourceType,
       type: 'upload',
       format: file.format,
@@ -122,6 +192,7 @@ export class CloudinaryStorageService implements StorageService {
   hoverPreviewUrl(file: FileRef): string {
     // Gerado pelo Cloudinary no primeiro pedido e depois servido pela CDN; nada é guardado à parte.
     return cloudinary.url(file.publicId, {
+      ...SIGNED,
       resource_type: 'video',
       format: 'mp4',
       transformation: [
@@ -141,17 +212,19 @@ export class CloudinaryStorageService implements StorageService {
     if (file.resourceType === 'image') {
       // Imagem: a própria imagem reduzida; a original só carrega ao abrir o meme.
       return cloudinary.url(file.publicId, {
+        ...SIGNED,
         resource_type: 'image',
         format: 'jpg',
-        transformation: [{ width: THUMB_WIDTH, crop: 'limit' }],
+        transformation: [{ width: THUMB_WIDTH, crop: 'limit', ...AUTO_FORMAT }],
       });
     }
     // Vídeo: fotograma por volta do 1.º segundo (ou o primeiro, se for mais curto).
     const startOffset = file.durationMs !== null && file.durationMs > 1000 ? 1 : 0;
     return cloudinary.url(file.publicId, {
+      ...SIGNED,
       resource_type: 'video',
       format: 'jpg',
-      transformation: [{ start_offset: startOffset, width: THUMB_WIDTH, crop: 'scale' }],
+      transformation: [{ start_offset: startOffset, width: THUMB_WIDTH, crop: 'scale', ...AUTO_FORMAT }],
     });
   }
 }

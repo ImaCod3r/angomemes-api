@@ -14,19 +14,27 @@ export const sessionCookieOptions: CookieOptions = {
   path: '/',
 };
 
-export function signSession(userId: string): string {
-  return jwt.sign({}, env.JWT_SECRET, {
+export interface SessionClaims {
+  userId: string;
+  /** Tem de ser igual a `users.session_version`; tokens antigos sem versão contam como 0. */
+  version: number;
+}
+
+export function signSession(userId: string, version = 0): string {
+  return jwt.sign({ ver: version }, env.JWT_SECRET, {
     subject: userId,
     expiresIn: SESSION_TTL_SECONDS,
     algorithm: 'HS256',
   });
 }
 
-/** Devolve o id do utilizador, ou null se o token for inválido ou estiver expirado. */
-export function verifySession(token: string): string | null {
+/** O id do utilizador e a versão da sessão, ou null se o token for inválido ou estiver expirado. */
+export function verifySession(token: string): SessionClaims | null {
   try {
     const payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
-    return typeof payload === 'object' && typeof payload.sub === 'string' ? payload.sub : null;
+    if (typeof payload !== 'object' || typeof payload.sub !== 'string') return null;
+    const version = payload.ver ?? 0;
+    return Number.isInteger(version) ? { userId: payload.sub, version } : null;
   } catch {
     return null;
   }

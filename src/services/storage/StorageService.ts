@@ -25,10 +25,32 @@ export interface FileRef {
 
 export type Visibility = 'public' | 'private';
 
+export interface DirectUploadInput {
+  /** Nome único escolhido pelo backend (um UUID); o storage junta-lhe a pasta. */
+  name: string;
+  resourceType: ResourceType;
+  allowedFormats: readonly string[];
+  visibility: Visibility;
+}
+
+/** Para o browser enviar o ficheiro: POST multipart para `url`, com `fields` e o campo `file`. */
+export interface SignedUpload {
+  url: string;
+  fields: Record<string, string>;
+  /** O public_id completo; o browser não o pode mudar sem partir a assinatura. */
+  publicId: string;
+}
+
 export interface StorageService {
   upload(input: UploadInput): Promise<StoredFile>;
+  /** Autoriza um envio direto do browser, só para este public_id, sem substituir nada. */
+  signUpload(input: DirectUploadInput): SignedUpload;
+  /** O que chegou de um envio direto (dados do próprio fornecedor), ou null se ainda não chegou. */
+  getUploaded(file: { publicId: string; resourceType: ResourceType; visibility: Visibility }): Promise<StoredFile | null>;
   destroy(file: FileRef & { visibility: 'public' | 'private' }): Promise<void>;
   fileUrl(file: FileRef): string;
+  /** Imagens: versão reduzida e comprimida para mostrar na página; outros tipos: o próprio ficheiro. */
+  displayUrl(file: FileRef): string;
   /**
    * URL que obriga o browser a descarregar, com o nome de ficheiro indicado (sem extensão).
    * Com `watermark`, o ficheiro descarregado leva a marca d'água do Angomemes (vídeos e imagens).

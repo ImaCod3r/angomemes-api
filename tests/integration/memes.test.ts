@@ -49,4 +49,30 @@ describe('memes', () => {
       expect(res.body.error.code, path).toBe('MEME_NOT_FOUND');
     }
   });
+  it('GET /memes/tags com tipo desconhecido devolve 400', async () => {
+    const res = await request(app).get('/memes/tags?type=sticker');
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /me/likes sem sessão devolve 401', async () => {
+    const res = await request(app).get('/me/likes?memeIds=7b0f4c1e-5d7a-4f3e-9a1b-2c3d4e5f6a7b');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /memes com página acima do máximo devolve 400', async () => {
+    const res = await request(app).get('/memes?page=1001');
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /memes de outra origem é recusado antes da sessão', async () => {
+    const res = await request(app).post('/memes').set('Origin', 'https://evil.example');
+    expect(res.status).toBe(403);
+  });
+  it('envio direto sem sessão devolve 401 (pedir ticket e reclamar)', async () => {
+    expect((await request(app).post('/memes/uploads').send({ type: 'video' })).status).toBe(401);
+    const claim = await request(app)
+      .post('/memes/uploads/7b0f4c1e-5d7a-4f3e-9a1b-2c3d4e5f6a7b')
+      .send({ title: 'X', tags: ['kuduro'] });
+    expect(claim.status).toBe(401);
+  });
 });

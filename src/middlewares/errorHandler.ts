@@ -7,7 +7,7 @@ export const notFound: RequestHandler = () => {
   throw new AppError(404, 'NOT_FOUND', 'Rota não encontrada.');
 };
 
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof AppError) {
     res.status(err.status).json({ error: { code: err.code, message: err.message } });
     return;
@@ -35,6 +35,8 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     return;
   }
 
-  console.error(err);
+  // `req.log` vem do pino-http; fora da app (testes de middlewares isolados) não existe.
+  if (req.log) req.log.error({ err }, 'Erro interno');
+  else console.error(err);
   res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro interno.' } });
 };

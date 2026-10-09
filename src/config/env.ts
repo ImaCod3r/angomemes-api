@@ -17,6 +17,10 @@ const envSchema = z.object({
         .filter(Boolean),
     ),
   FRONTEND_URL: z.url(),
+  // Quantos proxies (balanceador, CDN) estão à frente da API. Sem isto, atrás de um proxy
+  // todos os pedidos parecem vir do mesmo IP e os limites por IP ficam partilhados.
+  // Por omissão: 1 em produção, 0 no resto.
+  TRUST_PROXY: z.coerce.number().int().min(0).optional(),
   // Lido também diretamente pelo SDK do Cloudinary.
   CLOUDINARY_URL: z
     .string()
@@ -29,4 +33,7 @@ if (!parsed.success) {
   throw new Error(`Variáveis de ambiente inválidas:\n${z.prettifyError(parsed.error)}`);
 }
 
-export const env = parsed.data;
+export const env = {
+  ...parsed.data,
+  TRUST_PROXY: parsed.data.TRUST_PROXY ?? (parsed.data.NODE_ENV === 'production' ? 1 : 0),
+};

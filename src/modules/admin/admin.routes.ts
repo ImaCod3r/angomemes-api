@@ -7,6 +7,7 @@ import { requireAdmin } from '../../middlewares/auth.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
 import { MAX_TAGS_PER_MEME, TAG_MAX_LENGTH } from '../memes/tags.js';
 import { toAdminMemeDto, toAdminUserDto } from './admin.dto.js';
+import { MAX_PAGE } from '../memes/memes.service.js';
 import type { AdminService } from './admin.service.js';
 import type { UsersService } from './users.service.js';
 
@@ -18,7 +19,7 @@ const listQuery = z.object({
   status: z.enum(MEME_STATUSES).default('pending'),
   type: z.enum(MEME_TYPES).optional(),
   q: z.string().trim().max(100).optional().transform(emptyToUndefined),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
   limit: z.coerce
     .number()
     .int()
@@ -39,7 +40,7 @@ const editsBody = z.object({
 const usersQuery = z.object({
   role: z.enum(ROLES).optional(),
   q: z.string().trim().max(100).optional().transform(emptyToUndefined),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
   limit: z.coerce
     .number()
     .int()

@@ -5,8 +5,19 @@ import { signSession, verifySession } from '../../src/modules/auth/session.js';
 const userId = '7b0f4c1e-5d7a-4f3e-9a1b-2c3d4e5f6a7b';
 
 describe('sessão', () => {
-  it('um token assinado devolve o id do utilizador', () => {
-    expect(verifySession(signSession(userId))).toBe(userId);
+  it('um token assinado devolve o id do utilizador e a versão', () => {
+    expect(verifySession(signSession(userId))).toEqual({ userId, version: 0 });
+    expect(verifySession(signSession(userId, 3))).toEqual({ userId, version: 3 });
+  });
+
+  it('um token antigo, sem versão, conta como versão 0', () => {
+    const token = jwt.sign({}, process.env.JWT_SECRET!, { subject: userId, algorithm: 'HS256' });
+    expect(verifySession(token)).toEqual({ userId, version: 0 });
+  });
+
+  it('recusa uma versão que não é inteira', () => {
+    const token = jwt.sign({ ver: 'x' }, process.env.JWT_SECRET!, { subject: userId, algorithm: 'HS256' });
+    expect(verifySession(token)).toBeNull();
   });
 
   it('recusa um token alterado', () => {

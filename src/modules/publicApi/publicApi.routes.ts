@@ -5,8 +5,9 @@ import { z } from 'zod';
 import type { ApiKey } from '../../db/index.js';
 import { MEME_TYPES } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
+import { publicApiIpRateLimit } from '../../middlewares/rateLimit.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
-import type { MemesService } from '../memes/memes.service.js';
+import { MAX_PAGE, type MemesService } from '../memes/memes.service.js';
 import { MEME_SLUG_MAX, MEME_SLUG_PATTERN } from '../memes/slug.js';
 import { MEME_SORTS, RANDOM_SEED_MAX } from '../memes/sort.js';
 import { TAG_MAX_LENGTH } from '../memes/tags.js';
@@ -31,7 +32,7 @@ const listQuery = z.object({
   tag: z.string().trim().max(TAG_MAX_LENGTH).optional().transform(emptyToUndefined),
   sort: z.enum(MEME_SORTS).default('recent'),
   seed: z.coerce.number().int().min(0).max(RANDOM_SEED_MAX).default(0),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
   // Acima do máximo corta-se em vez de dar erro.
   limit: z.coerce
     .number()
@@ -102,12 +103,13 @@ export function createPublicApiRouter(deps: {
 
   // Aberta a qualquer origem, sem cookies: a autenticação é só pela chave.
   router.use(cors({ origin: '*', credentials: false, methods: ['GET'], allowedHeaders: ['Authorization'] }));
+  router.use(publicApiIpRateLimit);
   router.use(requireApiKey(deps.apiKeysService));
   router.use(deps.rateLimit ?? createPublicApiRateLimit());
 
   router.get('/memes', async (req, res) => {
     const query = listQuery.parse(req.query);
-    const page = await memesService.listPublished(query);
+    const page = await memesService.listPublished({ ...query, withTotal: true });
     res.json({ ...page, items: page.items.map(dto) });
   });
 
@@ -132,6 +134,7 @@ export function createPublicApiRouter(deps: {
   });
 
   router.get('/tags', async (_req, res) => {
+    res.set('Cache-Control', 'private, max-age=60');
     res.json({ items: await memesService.listPublicTags() });
   });
 

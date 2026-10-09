@@ -4,8 +4,10 @@ import express, { type RequestHandler } from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env.js';
+import { httpLogger } from './logger.js';
 import { loadSession } from './middlewares/auth.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
+import { requireSameOrigin } from './middlewares/sameOrigin.js';
 import { createAdminRouter } from './modules/admin/admin.routes.js';
 import { createAdminService } from './modules/admin/admin.service.js';
 import { createUsersService } from './modules/admin/users.service.js';
@@ -31,6 +33,8 @@ export interface AppDeps {
 
 export function createApp(deps: AppDeps) {
   const app = express();
+  app.set('trust proxy', env.TRUST_PROXY);
+  app.use(httpLogger);
 
   app.use(
     helmet({
@@ -69,6 +73,7 @@ export function createApp(deps: AppDeps) {
 
   // API interna: só a origem do frontend, com o cookie de sessão.
   app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+  app.use(requireSameOrigin(env.FRONTEND_URL));
   app.use(express.json());
   app.use(cookieParser());
   app.use(loadSession);
@@ -79,7 +84,7 @@ export function createApp(deps: AppDeps) {
   });
   app.use('/auth', createAuthRouter({ authService }));
 
-  app.use('/me', createMeRouter({ apiKeysService }));
+  app.use('/me', createMeRouter({ apiKeysService, likesService }));
   app.use('/memes', createMemesRouter({ memesService, likesService, storage: deps.storage }));
   app.use('/memes', createLikesRouter({ likesService }));
 

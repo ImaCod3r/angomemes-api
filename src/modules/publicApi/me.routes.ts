@@ -2,18 +2,40 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { AppError } from '../../errors.js';
 import { requireAuth } from '../../middlewares/auth.js';
+import type { LikesService } from '../likes/likes.service.js';
 import type { ApiKeysService } from './apiKeys.service.js';
 import { toApiKeyDto } from './publicApi.dto.js';
+
+/** No máximo uma página de memes por pedido. */
+const MAX_LIKE_IDS = 50;
+
+const likesQuery = z.object({
+  memeIds: z
+    .string()
+    .default('')
+    .transform((value) => [...new Set(value.split(',').filter(Boolean))])
+    .pipe(z.array(z.uuid()).max(MAX_LIKE_IDS)),
+});
 
 const createBody = z.object({
   name: z.string().trim().min(1, 'Dá um nome à chave (ex.: "Bot do WhatsApp").').max(60),
 });
 
-/** Gestão das chaves da própria pessoa (API interna, com sessão). */
-export function createMeRouter(deps: { apiKeysService: ApiKeysService }) {
-  const { apiKeysService } = deps;
+/** Dados da própria pessoa (API interna, com sessão): chaves da API e likes. */
+export function createMeRouter(deps: { apiKeysService: ApiKeysService; likesService: LikesService }) {
+  const { apiKeysService, likesService } = deps;
   const router = Router();
   router.use(requireAuth);
+
+  /**
+   * Quais destes memes têm like desta conta. As páginas públicas vêm da cache, iguais
+   * para toda a gente; o browser pede isto à parte para pintar os corações.
+   */
+  router.get('/likes', async (req, res) => {
+    const { memeIds } = likesQuery.parse(req.query);
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ memeIds: [...(await likesService.likedMemeIds(req.user!.id, memeIds))] });
+  });
 
   router.get('/api-keys', async (req, res) => {
     const keys = await apiKeysService.listForUser(req.user!);

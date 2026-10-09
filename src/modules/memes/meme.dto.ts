@@ -15,6 +15,8 @@ export function toMemeDto(meme: Meme, storage: StorageService, likedByMe = false
     title: meme.title,
     tags: tagsDto(meme),
     fileUrl: storage.fileUrl(ref),
+    /** Só imagens: reduzida e comprimida, para mostrar na página sem carregar o original. */
+    displayUrl: meme.type === 'image' ? storage.displayUrl(ref) : null,
     thumbUrl: meme.type === 'audio' ? null : storage.thumbnailUrl({ ...ref, durationMs: meme.durationMs }),
     previewUrl: meme.type === 'video' ? storage.hoverPreviewUrl(ref) : null,
     durationMs: meme.durationMs,

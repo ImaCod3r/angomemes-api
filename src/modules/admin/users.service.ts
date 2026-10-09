@@ -1,5 +1,6 @@
 import { literal, Op, type WhereOptions } from 'sequelize';
 import { User } from '../../db/index.js';
+import { escapeLike } from '../../db/like.js';
 import type { Role } from '../../db/models/User.js';
 import { AppError } from '../../errors.js';
 import type { Page } from '../memes/memes.service.js';
@@ -28,10 +29,6 @@ export interface UsersService {
 }
 
 const UPLOADS_COUNT = literal('(SELECT COUNT(*) FROM memes m WHERE m.uploaded_by = "User"."id")');
-
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, '\\$&');
-}
 
 export function createUsersService(deps: { adminEmails: string[] }): UsersService {
   const isLockedAdmin = (user: User) => deps.adminEmails.includes(user.email.toLowerCase());

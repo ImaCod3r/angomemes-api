@@ -1,5 +1,6 @@
 import { fn, col, Op, type Transaction, type WhereOptions } from 'sequelize';
 import { Meme, MemeTag, sequelize, Tag, User } from '../../db/index.js';
+import { escapeLike } from '../../db/like.js';
 import { MEME_STATUSES, type MemeStatus, type MemeType } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
@@ -36,10 +37,6 @@ const INCLUDE = [
   { model: Tag, as: 'tags', through: { attributes: [] } },
   { model: User, as: 'uploader', attributes: ['id', 'name', 'email'] },
 ];
-
-function escapeLike(value: string): string {
-  return value.replace(/[\%_]/g, '\$&');
-}
 
 function notFound(): AppError {
   return new AppError(404, 'MEME_NOT_FOUND', 'Meme não encontrado.');

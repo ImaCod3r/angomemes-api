@@ -17,6 +17,8 @@ export class User extends Model<InferAttributes<User>, InferCreationAttributes<U
   declare name: string;
   declare avatarUrl: string | null;
   declare role: CreationOptional<Role>;
+  /** Vai no token de sessão: incrementar termina todas as sessões da conta. */
+  declare sessionVersion: CreationOptional<number>;
   declare createdAt: CreationOptional<Date>;
 }
 
@@ -34,6 +36,7 @@ export function initUser(sequelize: Sequelize) {
         defaultValue: 'user',
         validate: { isIn: [ROLES] },
       },
+      sessionVersion: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
       createdAt: DataTypes.DATE,
     },
     { sequelize, tableName: 'users', underscored: true, updatedAt: false },

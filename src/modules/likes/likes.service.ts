@@ -1,5 +1,5 @@
-import { Op, QueryTypes, type Transaction } from 'sequelize';
-import { Like, Meme, sequelize } from '../../db/index.js';
+import { Op, QueryTypes } from 'sequelize';
+import { Like, sequelize } from '../../db/index.js';
 import { memeNotFound } from '../memes/memes.service.js';
 
 export interface LikeState {
@@ -16,48 +16,50 @@ export interface LikesService {
   likedMemeIds(userId: string, memeIds: string[]): Promise<Set<string>>;
 }
 
-/** Um meme que não está publicado dá 404, como se não existisse. */
-async function assertPublished(memeId: string, transaction: Transaction): Promise<void> {
-  const meme = await Meme.findOne({ attributes: ['id'], where: { id: memeId, status: 'published' }, transaction });
-  if (!meme) throw memeNotFound();
-}
+/**
+ * Like e unlike numa só instrução SQL (atómica por si): confirma que o meme está publicado,
+ * insere ou apaga o like e só mexe na contagem se a linha mudou de facto.
+ * `found` falso: o meme não existe ou não está publicado.
+ */
+const LIKE_SQL = `
+  WITH target AS (
+    SELECT id FROM memes WHERE id = :memeId AND status = 'published'
+  ), changed AS (
+    -- ON CONFLICT: dois pedidos ao mesmo tempo nunca dão 2 likes; só quem inseriu soma.
+    INSERT INTO likes (user_id, meme_id) SELECT :userId, id FROM target
+    ON CONFLICT DO NOTHING RETURNING meme_id
+  ), updated AS (
+    UPDATE memes SET likes_count = likes_count + 1 WHERE id IN (SELECT meme_id FROM changed) RETURNING likes_count
+  )
+  SELECT EXISTS (SELECT 1 FROM target) AS found,
+         COALESCE((SELECT likes_count FROM updated), (SELECT likes_count FROM memes WHERE id = :memeId)) AS likes_count`;
 
-async function likesCountOf(memeId: string, transaction: Transaction): Promise<number> {
-  const meme = await Meme.findByPk(memeId, { attributes: ['likesCount'], transaction, rejectOnEmpty: true });
-  return meme.likesCount;
+const UNLIKE_SQL = `
+  WITH target AS (
+    SELECT id FROM memes WHERE id = :memeId AND status = 'published'
+  ), changed AS (
+    DELETE FROM likes WHERE user_id = :userId AND meme_id IN (SELECT id FROM target) RETURNING meme_id
+  ), updated AS (
+    UPDATE memes SET likes_count = GREATEST(likes_count - 1, 0) WHERE id IN (SELECT meme_id FROM changed) RETURNING likes_count
+  )
+  SELECT EXISTS (SELECT 1 FROM target) AS found,
+         COALESCE((SELECT likes_count FROM updated), (SELECT likes_count FROM memes WHERE id = :memeId)) AS likes_count`;
+
+async function toggleLike(sql: string, userId: string, memeId: string, liked: boolean): Promise<LikeState> {
+  const [row] = await sequelize.query<{ found: boolean; likes_count: number | null }>(sql, {
+    replacements: { userId, memeId },
+    type: QueryTypes.SELECT,
+  });
+  // Um meme que não está publicado dá 404, como se não existisse.
+  if (!row?.found) throw memeNotFound();
+  return { liked, likesCount: Number(row.likes_count ?? 0) };
 }
 
 export function createLikesService(): LikesService {
   return {
-    like(userId, memeId) {
-      return sequelize.transaction(async (transaction) => {
-        await assertPublished(memeId, transaction);
-        // ON CONFLICT: dois pedidos ao mesmo tempo nunca dão 2 likes; só quem inseriu soma.
-        const inserted = await sequelize.query(
-          `INSERT INTO likes (user_id, meme_id) VALUES (:userId, :memeId)
-           ON CONFLICT DO NOTHING RETURNING meme_id`,
-          { replacements: { userId, memeId }, type: QueryTypes.SELECT, transaction },
-        );
-        if (inserted.length > 0) {
-          await Meme.increment('likesCount', { by: 1, where: { id: memeId }, transaction });
-        }
-        return { liked: true, likesCount: await likesCountOf(memeId, transaction) };
-      });
-    },
+    like: (userId, memeId) => toggleLike(LIKE_SQL, userId, memeId, true),
 
-    unlike(userId, memeId) {
-      return sequelize.transaction(async (transaction) => {
-        await assertPublished(memeId, transaction);
-        const deleted = await sequelize.query(
-          'DELETE FROM likes WHERE user_id = :userId AND meme_id = :memeId RETURNING meme_id',
-          { replacements: { userId, memeId }, type: QueryTypes.SELECT, transaction },
-        );
-        if (deleted.length > 0) {
-          await Meme.decrement('likesCount', { by: 1, where: { id: memeId }, transaction });
-        }
-        return { liked: false, likesCount: await likesCountOf(memeId, transaction) };
-      });
-    },
+    unlike: (userId, memeId) => toggleLike(UNLIKE_SQL, userId, memeId, false),
 
     async likedMemeIds(userId, memeIds) {
       if (memeIds.length === 0) return new Set();

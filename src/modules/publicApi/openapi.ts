@@ -3,6 +3,7 @@
  * alternativa ao zod-to-openapi). O teste de contrato confirma que o DTO e o
  * schema `Meme` têm exatamente os mesmos campos.
  */
+import { MAX_PAGE } from '../memes/memes.service.js';
 import { MAX_ACTIVE_KEYS_PER_USER } from './apiKeys.js';
 
 export const PUBLIC_API_RATE_LIMIT_PER_MINUTE = 60;
@@ -76,7 +77,7 @@ export function buildOpenApiSpec(serverUrl: string) {
               schema: { type: 'integer', minimum: 0 },
               description: 'Com `sort=random`: a mesma semente dá a mesma ordem, para paginar sem repetir.',
             },
-            { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+            { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, maximum: MAX_PAGE, default: 1 } },
             {
               name: 'limit',
               in: 'query',

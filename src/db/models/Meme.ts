@@ -41,6 +41,8 @@ export class Meme extends Model<InferAttributes<Meme>, InferCreationAttributes<M
   declare downloadsCount: CreationOptional<number>;
   /** Quantas contas deram like; atualizado na mesma transação de cada like. */
   declare likesCount: CreationOptional<number>;
+  /** Número fixo em [0, 1), sorteado pela base ao criar; serve para escolher um meme ao acaso. */
+  declare randomKey: CreationOptional<number>;
   declare createdAt: CreationOptional<Date>;
 
   declare tags?: NonAttribute<Tag[]>;
@@ -69,6 +71,9 @@ export function initMeme(sequelize: Sequelize) {
       publishedAt: { type: DataTypes.DATE, allowNull: true },
       downloadsCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
       likesCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+      // Sem default nem allowNull aqui: o INSERT omite a coluna e vale o random() da base,
+      // que também garante o NOT NULL.
+      randomKey: { type: DataTypes.DOUBLE },
       createdAt: DataTypes.DATE,
     },
     { sequelize, tableName: 'memes', underscored: true, updatedAt: false },

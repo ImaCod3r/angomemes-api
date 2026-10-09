@@ -19,7 +19,7 @@ export function createAuthRouter(deps: { authService: AuthService }) {
     const { idToken } = googleLoginBody.parse(req.body);
     const user = await deps.authService.loginWithGoogle(idToken);
 
-    res.cookie(SESSION_COOKIE, signSession(user.id), {
+    res.cookie(SESSION_COOKIE, signSession(user.id, user.sessionVersion), {
       ...sessionCookieOptions,
       maxAge: SESSION_MAX_AGE_MS,
     });
@@ -31,6 +31,13 @@ export function createAuthRouter(deps: { authService: AuthService }) {
   });
 
   router.post('/logout', authRateLimit, (_req, res) => {
+    res.clearCookie(SESSION_COOKIE, sessionCookieOptions);
+    res.status(204).end();
+  });
+
+  // Termina as sessões em todos os aparelhos (por exemplo, telemóvel perdido ou cookie roubado).
+  router.post('/logout-all', authRateLimit, requireAuth, async (req, res) => {
+    await req.user!.increment('sessionVersion');
     res.clearCookie(SESSION_COOKIE, sessionCookieOptions);
     res.status(204).end();
   });

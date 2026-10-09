@@ -50,3 +50,34 @@ describe('CloudinaryStorageService.downloadUrl com marca d\'água', () => {
     expect(storage.downloadUrl(ref, 'ya-mano')).not.toContain('l_text');
   });
 });
+
+describe('CloudinaryStorageService: URLs assinados e comprimidos', () => {
+  const storage = new CloudinaryStorageService('angomemes/test');
+  const image = { publicId: 'angomemes/test/img', resourceType: 'image' as const, format: 'png' };
+  const video = { publicId: 'angomemes/test/vid', resourceType: 'video' as const, format: 'mp4' };
+
+  it('todos os URLs públicos levam assinatura (strict transformations)', () => {
+    const urls = [
+      storage.fileUrl(image),
+      storage.displayUrl(image),
+      storage.downloadUrl(video, 'ya-mano', { watermark: true }),
+      storage.hoverPreviewUrl(video),
+      storage.thumbnailUrl({ ...image, durationMs: null }),
+      storage.thumbnailUrl({ ...video, durationMs: 5000 }),
+    ];
+    for (const url of urls) expect(url, url).toMatch(/\/s--[A-Za-z0-9_-]{8}--\//);
+  });
+
+  it('miniaturas e imagem da página com formato e qualidade automáticos', () => {
+    expect(storage.thumbnailUrl({ ...image, durationMs: null })).toContain('f_auto');
+    expect(storage.thumbnailUrl({ ...video, durationMs: 5000 })).toContain('q_auto');
+    const display = storage.displayUrl(image);
+    expect(display).toContain('w_1280');
+    expect(display).toContain('c_limit');
+    expect(display).toContain('f_auto');
+  });
+
+  it('displayUrl de um vídeo é o próprio ficheiro', () => {
+    expect(storage.displayUrl(video)).toBe(storage.fileUrl(video));
+  });
+});
