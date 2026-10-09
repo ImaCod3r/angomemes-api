@@ -1,0 +1,20 @@
+# Build e arranque da API com Nixpacks (Railway, Coolify, Sevalla…).
+# O diretório da aplicação no alojamento deve ser `backend/`.
+
+[variables]
+# Node 22 LTS. O Nixpacks só fixa a versão principal; esta variável tem prioridade sobre
+# o `engines` do package.json (>=22.9, para os scripts de desenvolvimento com --env-file).
+NIXPACKS_NODE_VERSION = "22"
+
+[phases.install]
+# As devDependencies (TypeScript) fazem falta para compilar; saem depois do build.
+cmds = ["npm ci --include=dev"]
+
+[phases.build]
+cmds = ["npm run build", "npm prune --omit=dev"]
+
+[start]
+# Migrações primeiro (umzug só aplica as que faltam), depois a API.
+# Com várias instâncias, passa as migrações para o "pre-deploy" do alojamento
+# (`npm run db:migrate:prod`) e deixa aqui só `npm run start:prod`.
+cmd = "npm run db:migrate:prod && npm run start:prod"

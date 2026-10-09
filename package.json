@@ -1,20 +1,25 @@
 {
   "name": "angomemes-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "API do Angomemes: acervo de memes angolanos (Express, PostgreSQL e Cloudinary).",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
     "build": "tsc",
     "start": "node --env-file-if-exists=.env dist/server.js",
+    "start:prod": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
+    "db:migrate:prod": "node dist/db/migrate.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=22.9"
+  },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
     "cloudinary": "^2.11.0",
