@@ -63,13 +63,14 @@ export function buildOpenApiSpec(serverUrl: string) {
           operationId: 'listMemes',
           parameters: [
             typeParam,
-            { name: 'q', in: 'query', schema: { type: 'string', maxLength: 100 }, description: 'Pesquisa no título.' },
+            { name: 'q', in: 'query', schema: { type: 'string', maxLength: 100 }, description: 'Pesquisa no título e nas tags, sem ligar a acentos e com tolerância a erros de escrita.' },
             tagParam,
             {
               name: 'sort',
               in: 'query',
-              schema: { type: 'string', enum: ['recent', 'popular', 'random'], default: 'recent' },
-              description: '`popular` = mais likes (desempate: descargas). `random` usa `seed`.',
+              schema: { type: 'string', enum: ['recent', 'popular', 'random', 'relevance'], default: 'recent' },
+              description:
+                '`popular` = mais likes (desempate: descargas). `random` usa `seed`. `relevance` (com `q`) põe primeiro os que correspondem melhor e aceita memes que tenham só parte das palavras.',
             },
             {
               name: 'seed',

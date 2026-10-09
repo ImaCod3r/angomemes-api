@@ -49,6 +49,19 @@ describe('memes', () => {
       expect(res.body.error.code, path).toBe('MEME_NOT_FOUND');
     }
   });
+  it('GET /memes/suggestions com menos de 2 letras devolve vazio sem tocar na base', async () => {
+    for (const q of ['', 'a', '  b  ']) {
+      const res = await request(app).get('/memes/suggestions').query({ q });
+      expect(res.status, q).toBe(200);
+      expect(res.body, q).toEqual({ tags: [], memes: [] });
+    }
+  });
+
+  it('GET /memes/suggestions com tipo desconhecido ou pesquisa longa devolve 400', async () => {
+    expect((await request(app).get('/memes/suggestions?q=ya&type=sticker')).status).toBe(400);
+    expect((await request(app).get(`/memes/suggestions?q=${'a'.repeat(101)}`)).status).toBe(400);
+  });
+
   it('GET /memes/tags com tipo desconhecido devolve 400', async () => {
     const res = await request(app).get('/memes/tags?type=sticker');
     expect(res.status).toBe(400);

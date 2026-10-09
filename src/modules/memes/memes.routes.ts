@@ -17,6 +17,9 @@ import { MEME_SORTS, RANDOM_SEED_MAX } from './sort.js';
 import { MAX_TAGS_PER_MEME, TAG_MAX_LENGTH } from './tags.js';
 
 const MAX_PAGE_SIZE = 50;
+/** Com menos letras as sugestões seriam quase todos os memes. */
+const MIN_SUGGESTION_LENGTH = 2;
+const MAX_SUGGESTED_MEMES = 8;
 /** Uploads em curso ao mesmo tempo nesta instância (cada um fica em memória até 50 MB). */
 const MAX_CONCURRENT_UPLOADS = 4;
 
@@ -26,7 +29,8 @@ const listQuery = z.object({
   type: z.enum(MEME_TYPES).optional(),
   q: z.string().trim().max(100).optional().transform(emptyToUndefined),
   tag: z.string().trim().max(TAG_MAX_LENGTH).optional().transform(emptyToUndefined),
-  sort: z.enum(MEME_SORTS).default('recent'),
+  // Sem ordem: os mais relevantes se houver pesquisa, os mais recentes se não.
+  sort: z.enum(MEME_SORTS).optional(),
   seed: z.coerce.number().int().min(0).max(RANDOM_SEED_MAX).default(0),
   page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
   // Acima do máximo corta-se em vez de dar erro.
@@ -85,6 +89,12 @@ export function createMemesRouter(deps: {
 
   const tagsQuery = z.object({ type: z.enum(MEME_TYPES).optional() });
 
+  const suggestionsQuery = z.object({
+    q: z.string().trim().max(100).default(''),
+    type: z.enum(MEME_TYPES).optional(),
+    limit: z.coerce.number().int().min(1).max(MAX_SUGGESTED_MEMES).default(MAX_SUGGESTED_MEMES),
+  });
+
   // Para o sitemap.xml do frontend: só o necessário de cada meme publicado.
   router.get('/sitemap', async (_req, res) => {
     const memes = await memesService.listForSitemap();
@@ -105,7 +115,32 @@ export function createMemesRouter(deps: {
     });
   });
 
-  // Antes de /:slug, senão "tags" e "sitemap" seriam lidos como slugs.
+  // Sugestões enquanto se escreve na pesquisa. Iguais para toda a gente: sem likes e em cache.
+  router.get('/suggestions', async (req, res) => {
+    const { q, type, limit } = suggestionsQuery.parse(req.query);
+    const result =
+      q.length < MIN_SUGGESTION_LENGTH ? { tags: [], memes: [] } : await memesService.suggest({ q, type, limit });
+    res.set('Cache-Control', 'public, max-age=60');
+    res.json({
+      tags: result.tags,
+      memes: result.memes.map((meme) => ({
+        slug: meme.slug,
+        title: meme.title,
+        type: meme.type,
+        thumbUrl:
+          meme.type === 'audio'
+            ? null
+            : storage.thumbnailUrl({
+                publicId: meme.publicId,
+                resourceType: meme.resourceType,
+                format: meme.format,
+                durationMs: meme.durationMs,
+              }),
+      })),
+    });
+  });
+
+  // Esta, a de cima e /sitemap ficam antes de /:slug, senão "tags", "sitemap" e "suggestions" seriam lidos como slugs.
   router.get('/tags', async (req, res) => {
     const { type } = tagsQuery.parse(req.query);
     res.set('Cache-Control', 'public, max-age=60');

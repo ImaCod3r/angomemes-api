@@ -20,6 +20,7 @@ import {
 } from '../../services/storage/StorageService.js';
 import { acceptedFormatsMessage, detectFormat, MEME_TYPE_RULES, tooLargeMessage } from './memeTypes.js';
 import { memeSlugBase, pickFreeSlug } from './slug.js';
+import { FUZZY_THRESHOLD, relevanceSql, searchTerms, searchWhere } from './search.js';
 import { type MemeSort, orderFor } from './sort.js';
 import { MAX_TAGS_PER_MEME, normalizeTags, slugifyTag } from './tags.js';
 
@@ -27,6 +28,7 @@ export interface ListPublishedQuery {
   type?: MemeType;
   q?: string;
   tag?: string;
+  /** Por omissão: `relevance` com pesquisa, `recent` sem. */
   sort?: MemeSort;
   /** Só para `sort: 'random'`. */
   seed?: number;
@@ -38,6 +40,9 @@ export interface ListPublishedQuery {
    */
   withTotal?: boolean;
 }
+
+/** Tags nas sugestões da pesquisa. */
+const SUGGESTED_TAGS = 4;
 
 /** Páginas muito fundas obrigam a base a saltar milhares de linhas (OFFSET): param aqui. */
 export const MAX_PAGE = 1000;
@@ -95,6 +100,8 @@ export interface MemesService {
    * as mais usadas primeiro. Em cache durante um minuto.
    */
   listPublicTags(type?: MemeType): Promise<PublicTag[]>;
+  /** Enquanto se escreve: as tags e os memes publicados que correspondem melhor a `q`. */
+  suggest(query: { q: string; type?: MemeType; limit: number }): Promise<{ tags: PublicTag[]; memes: Meme[] }>;
   /** Todos os publicados (só os campos do sitemap), os mais recentes primeiro. */
   listForSitemap(): Promise<Meme[]>;
   /** Conta uma descarga; nunca falha o pedido de descarga por causa disto. */
@@ -245,12 +252,21 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
   }
 
   return {
-    async listPublished({ type, q, tag, sort = 'recent', seed = 0, page, limit, withTotal = false }) {
+    async listPublished({ type, q, tag, sort, seed = 0, page, limit, withTotal = false }) {
       // Só `published`: pendentes, rejeitados e removidos nunca saem daqui.
       const conditions: WhereOptions<Meme>[] = [{ status: 'published' }];
       if (type) conditions.push({ type });
-      if (q) conditions.push({ title: { [Op.iLike]: `%${escapeLike(q)}%` } });
+      const terms = q ? searchTerms(q) : null;
+      // Com pesquisa e sem ordem escolhida, os que correspondem melhor primeiro.
+      const effectiveSort = sort ?? (terms ? 'relevance' : 'recent');
+      const byRelevance = terms !== null && effectiveSort === 'relevance';
+      if (q && !terms) return { items: [], page, limit, total: withTotal ? 0 : undefined, hasMore: false };
+      if (terms) conditions.push(searchWhere(terms, byRelevance ? 'some' : 'every'));
       if (tag) conditions.push(publishedWithTag(tag));
+
+      const order = byRelevance
+        ? [[relevanceSql(terms), 'DESC'], ['likesCount', 'DESC'], ['publishedAt', 'DESC'], ['id', 'DESC']]
+        : (orderFor(effectiveSort, seed) as unknown[]);
 
       const where = { [Op.and]: conditions };
       const [rows, total] = await Promise.all([
@@ -258,7 +274,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
         Meme.findAll({
           where,
           include: [{ model: Tag, as: 'tags', through: { attributes: [] } }],
-          order: [...(orderFor(sort, seed) as unknown[]), [{ model: Tag, as: 'tags' }, 'name', 'ASC']] as Order,
+          order: [...order, [{ model: Tag, as: 'tags' }, 'name', 'ASC']] as Order,
           limit: limit + 1,
           offset: (page - 1) * limit,
         }),
@@ -294,6 +310,42 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
         });
       const picked = (await pick(Math.random())) ?? (await pick());
       return picked ? this.getPublishedById(picked.id) : null;
+    },
+
+    async suggest({ q, type, limit }) {
+      const terms = searchTerms(q);
+      if (!terms) return { tags: [], memes: [] };
+      const tagSlug = slugifyTag(q);
+      const [tags, memes] = await Promise.all([
+        tagSlug
+          ? sequelize.query<{ slug: string; name: string; memes_count: string }>(
+              `SELECT t.slug, t.name, COUNT(*) AS memes_count
+                 FROM tags t
+                 JOIN meme_tags mt ON mt.tag_id = t.id
+                 JOIN memes m ON m.id = mt.meme_id AND m.status = 'published'${type ? ' AND m.type = :type' : ''}
+                WHERE t.slug LIKE :like OR word_similarity(:slug, t.slug) >= :threshold
+                GROUP BY t.id
+                ORDER BY (t.slug LIKE :prefix) DESC, word_similarity(:slug, t.slug) DESC, COUNT(*) DESC
+                LIMIT :limit`,
+              {
+                type: QueryTypes.SELECT,
+                replacements: {
+                  ...(type ? { type } : {}),
+                  slug: tagSlug,
+                  like: `%${escapeLike(tagSlug)}%`,
+                  prefix: `${escapeLike(tagSlug)}%`,
+                  threshold: FUZZY_THRESHOLD,
+                  limit: SUGGESTED_TAGS,
+                },
+              },
+            )
+          : [],
+        this.listPublished({ type, q, sort: 'relevance', page: 1, limit }),
+      ]);
+      return {
+        tags: tags.map((row) => ({ slug: row.slug, name: row.name, memesCount: Number(row.memes_count) })),
+        memes: memes.items,
+      };
     },
 
     listPublicTags(type) {
