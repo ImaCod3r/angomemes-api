@@ -16,5 +16,7 @@ cmds = ["npm run build", "npm prune --omit=dev"]
 [start]
 # Migrações primeiro (umzug só aplica as que faltam), depois a API.
 # Com várias instâncias, passa as migrações para o "pre-deploy" do alojamento
-# (`npm run db:migrate:prod`) e deixa aqui só `npm run start:prod`.
-cmd = "npm run db:migrate:prod && npm run start:prod"
+# (`npm run db:migrate:prod`) e deixa aqui só `node dist/server.js`.
+# Node direto (sem npm) e com `exec`: o SIGTERM do redeploy chega à API, que fecha com calma,
+# e o npm não enche o log com "command failed / signal SIGTERM".
+cmd = "node dist/db/migrate.js && exec node dist/server.js"

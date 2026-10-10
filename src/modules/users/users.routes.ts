@@ -23,7 +23,8 @@ export function createUsersRouter(deps: { profilesService: ProfilesService }) {
         name: user.name,
         avatarUrl: user.avatarUrl,
         verified: user.role === 'admin',
-        memesCount: user.memesCount,
+        memesCount: Object.values(user.memesByType).reduce((sum, n) => sum + n, 0),
+        memesByType: user.memesByType,
         joinedAt: user.createdAt,
       },
     });
