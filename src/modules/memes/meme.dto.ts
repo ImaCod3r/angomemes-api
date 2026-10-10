@@ -33,14 +33,19 @@ export function toMemeDto(meme: Meme, storage: StorageService, likedByMe = false
 
 /**
  * Página de um meme: o mesmo da listagem e quem o enviou.
- * Só nome, avatar e se é verificado (administrador); nunca email nem ids internos.
+ * Só nome, username (para o perfil), avatar e se é verificado (administrador); nunca email nem ids internos.
  */
 export function toMemeDetailDto(meme: Meme, storage: StorageService, likedByMe = false) {
   const uploader = meme.uploader;
   return {
     ...toMemeDto(meme, storage, likedByMe),
     uploader: uploader
-      ? { name: uploader.name, avatarUrl: uploader.avatarUrl, verified: uploader.role === 'admin' }
+      ? {
+          name: uploader.name,
+          username: uploader.username,
+          avatarUrl: uploader.avatarUrl,
+          verified: uploader.role === 'admin',
+        }
       : null,
   };
 }

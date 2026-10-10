@@ -11,6 +11,7 @@ import * as performanceIndexes from './migrations/0008-performance-indexes.js';
 import * as addMemeRandomKey from './migrations/0009-add-meme-random-key.js';
 import * as createUploadTickets from './migrations/0010-create-upload-tickets.js';
 import * as searchNormalize from './migrations/0011-search-normalize.js';
+import * as addUserUsername from './migrations/0012-add-user-username.js';
 
 // Lista explícita em vez de glob: funciona igual com tsx (.ts) e depois do build (.js).
 export const migrator = new Umzug({
@@ -26,6 +27,7 @@ export const migrator = new Umzug({
     { name: '0009-add-meme-random-key', ...addMemeRandomKey },
     { name: '0010-create-upload-tickets', ...createUploadTickets },
     { name: '0011-search-normalize', ...searchNormalize },
+    { name: '0012-add-user-username', ...addUserUsername },
   ],
   context: sequelize.getQueryInterface(),
   storage: new SequelizeStorage({ sequelize }),

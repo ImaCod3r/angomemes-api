@@ -28,6 +28,8 @@ export interface ListPublishedQuery {
   type?: MemeType;
   q?: string;
   tag?: string;
+  /** Só os de uma conta (pelo username). */
+  uploader?: string;
   /** Por omissão: `relevance` com pesquisa, `recent` sem. */
   sort?: MemeSort;
   /** Só para `sort: 'random'`. */
@@ -158,6 +160,12 @@ function publishedWithTag(tag: string) {
   );
 }
 
+function uploadedBy(username: string) {
+  return literal(
+    `"Meme"."uploaded_by" = (SELECT u.id FROM users u WHERE u.username = ${sequelize.escape(username)})`,
+  );
+}
+
 /**
  * A assinatura do Cloudinary vale 1 hora; o ticket pode ser reclamado durante 2, para um
  * envio lento que começou perto do fim ainda chegar a tempo.
@@ -252,7 +260,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
   }
 
   return {
-    async listPublished({ type, q, tag, sort, seed = 0, page, limit, withTotal = false }) {
+    async listPublished({ type, q, tag, uploader, sort, seed = 0, page, limit, withTotal = false }) {
       // Só `published`: pendentes, rejeitados e removidos nunca saem daqui.
       const conditions: WhereOptions<Meme>[] = [{ status: 'published' }];
       if (type) conditions.push({ type });
@@ -263,6 +271,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       if (q && !terms) return { items: [], page, limit, total: withTotal ? 0 : undefined, hasMore: false };
       if (terms) conditions.push(searchWhere(terms, byRelevance ? 'some' : 'every'));
       if (tag) conditions.push(publishedWithTag(tag));
+      if (uploader) conditions.push(uploadedBy(uploader));
 
       const order = byRelevance
         ? [[relevanceSql(terms), 'DESC'], ['likesCount', 'DESC'], ['publishedAt', 'DESC'], ['id', 'DESC']]
@@ -381,7 +390,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
         include: [
           { model: Tag, as: 'tags', through: { attributes: [] } },
           // Nunca o email: só o que aparece na página pública.
-          { model: User, as: 'uploader', attributes: ['name', 'avatarUrl', 'role'] },
+          { model: User, as: 'uploader', attributes: ['name', 'username', 'avatarUrl', 'role'] },
         ],
         order: [[{ model: Tag, as: 'tags' }, 'name', 'ASC']],
       });

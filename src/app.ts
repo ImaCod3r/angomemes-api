@@ -21,6 +21,8 @@ import { createApiKeysService } from './modules/publicApi/apiKeys.service.js';
 import { createMeRouter } from './modules/publicApi/me.routes.js';
 import { buildOpenApiSpec } from './modules/publicApi/openapi.js';
 import { createPublicApiRouter } from './modules/publicApi/publicApi.routes.js';
+import { createProfilesService } from './modules/users/profiles.service.js';
+import { createUsersRouter } from './modules/users/users.routes.js';
 import type { GoogleVerifier } from './services/google/GoogleVerifier.js';
 import type { StorageService } from './services/storage/StorageService.js';
 
@@ -87,6 +89,7 @@ export function createApp(deps: AppDeps) {
   app.use('/me', createMeRouter({ apiKeysService, likesService }));
   app.use('/memes', createMemesRouter({ memesService, likesService, storage: deps.storage }));
   app.use('/memes', createLikesRouter({ likesService }));
+  app.use('/users', createUsersRouter({ profilesService: createProfilesService() }));
 
   const adminService = createAdminService({ storage: deps.storage });
   const usersService = createUsersService({ adminEmails: env.ADMIN_EMAILS });

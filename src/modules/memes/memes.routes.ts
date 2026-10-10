@@ -9,6 +9,7 @@ import { createDownloadCountLimit, uploadRateLimit } from '../../middlewares/rat
 import { uploadMemeFile } from '../../middlewares/upload.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
 import type { LikesService } from '../likes/likes.service.js';
+import { USERNAME_MAX } from '../users/username.js';
 import { toMemeDetailDto, toMemeDto, toUploadedMemeDto } from './meme.dto.js';
 import { hasWatermark } from './memeTypes.js';
 import { MAX_PAGE, memeNotFound, type MemesService } from './memes.service.js';
@@ -29,6 +30,8 @@ const listQuery = z.object({
   type: z.enum(MEME_TYPES).optional(),
   q: z.string().trim().max(100).optional().transform(emptyToUndefined),
   tag: z.string().trim().max(TAG_MAX_LENGTH).optional().transform(emptyToUndefined),
+  // Um username com formato impossível nunca existe: nenhum meme, sem erro.
+  uploader: z.string().trim().max(USERNAME_MAX).optional().transform(emptyToUndefined),
   // Sem ordem: os mais relevantes se houver pesquisa, os mais recentes se não.
   sort: z.enum(MEME_SORTS).optional(),
   seed: z.coerce.number().int().min(0).max(RANDOM_SEED_MAX).default(0),
