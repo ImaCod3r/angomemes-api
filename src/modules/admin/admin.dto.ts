@@ -1,6 +1,7 @@
 import type { Meme } from '../../db/index.js';
 import type { UserWithUploads } from './users.service.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
+import { memeFiles } from '../memes/memeFiles.js';
 import { visibilityOf } from '../memes/memeStatus.js';
 
 /** Meme visto pelo administrador: qualquer estado, com quem enviou e a revisão. */
@@ -21,6 +22,16 @@ export function toAdminMemeDto(meme: Meme, storage: StorageService) {
       : null,
     // Pendentes e removidos só por URL temporário; os rejeitados já não têm ficheiro.
     previewUrl: visibility === null ? null : isPublic ? storage.fileUrl(ref) : storage.privateUrl(ref),
+    /** Coleções: todos os ficheiros, a capa primeiro, para rever o carrossel inteiro. */
+    media:
+      visibility === null
+        ? []
+        : memeFiles(meme).map((file) => ({
+            previewUrl: isPublic ? storage.fileUrl(file) : storage.privateUrl(file),
+            width: file.width,
+            height: file.height,
+            durationMs: file.durationMs,
+          })),
     thumbUrl:
       isPublic && meme.type !== 'audio' ? storage.thumbnailUrl({ ...ref, durationMs: meme.durationMs }) : null,
     format: meme.format,

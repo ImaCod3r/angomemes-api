@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Meme } from '../../src/db/index.js';
-import { toMemeDetailDto } from '../../src/modules/memes/meme.dto.js';
+import type { Meme, MemeMedia } from '../../src/db/index.js';
+import { toMemeDetailDto, toMemeDto } from '../../src/modules/memes/meme.dto.js';
 import { InMemoryStorageService } from '../../src/services/storage/InMemoryStorageService.js';
 
 const storage = new InMemoryStorageService();
@@ -38,5 +38,28 @@ describe('toMemeDetailDto', () => {
 
   it('sem uploader carregado devolve null', () => {
     expect(toMemeDetailDto(memeWith(undefined), storage).uploader).toBeNull();
+  });
+});
+
+describe('toMemeDto: media', () => {
+  it('meme simples: sem `media` (os URLs de cima já são os do ficheiro)', () => {
+    const dto = toMemeDto(memeWith(undefined), storage);
+    expect(dto).not.toHaveProperty('media');
+  });
+
+  it('coleção: a capa primeiro e depois por posição', () => {
+    const meme = memeWith(undefined);
+    meme.media = [
+      { position: 2, publicId: 'test/c', resourceType: 'image', format: 'png', durationMs: null, width: 1, height: 1 },
+      { position: 1, publicId: 'test/b', resourceType: 'image', format: 'webp', durationMs: null, width: 1, height: 1 },
+    ] as unknown as MemeMedia[];
+    const dto = toMemeDto(meme, storage);
+    expect(dto.media?.map((m) => m.fileUrl)).toEqual([
+      'https://storage.test/image/test/abc.jpg',
+      'https://storage.test/image/test/b.webp',
+      'https://storage.test/image/test/c.png',
+    ]);
+    // Os campos de topo continuam a ser os da capa.
+    expect(dto.fileUrl).toBe('https://storage.test/image/test/abc.jpg');
   });
 });

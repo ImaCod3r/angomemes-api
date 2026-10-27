@@ -1,9 +1,10 @@
-import { fn, col, Op, type Transaction, type WhereOptions } from 'sequelize';
-import { Meme, MemeTag, sequelize, Tag, User } from '../../db/index.js';
+import { fn, col, type Includeable, Op, type Transaction, type WhereOptions } from 'sequelize';
+import { Meme, MemeMedia, MemeTag, sequelize, Tag, User } from '../../db/index.js';
 import { escapeLike } from '../../db/like.js';
 import { MEME_STATUSES, type MemeStatus, type MemeType } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
+import { memeFiles, setVisibilityAll } from '../memes/memeFiles.js';
 import { assertTransition } from '../memes/memeStatus.js';
 import { type Page, upsertTags, validatedTags } from '../memes/memes.service.js';
 
@@ -33,9 +34,11 @@ export interface AdminService {
   remove(id: string, reviewer: User): Promise<Meme>;
 }
 
-const INCLUDE = [
+const INCLUDE: Includeable[] = [
   { model: Tag, as: 'tags', through: { attributes: [] } },
   { model: User, as: 'uploader', attributes: ['id', 'name', 'email'] },
+  // Numa consulta à parte: no mesmo JOIN que as tags, cada meme dava tags × ficheiros linhas.
+  { model: MemeMedia, as: 'media', separate: true, order: [['position', 'ASC']] },
 ];
 
 function notFound(): AppError {
@@ -74,8 +77,9 @@ export function createAdminService(deps: { storage: StorageService }): AdminServ
     }
   }
 
-  function refOf(meme: Meme) {
-    return { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
+  /** A capa e, numa coleção, os restantes: o estado muda para todos ao mesmo tempo. */
+  function refsOf(meme: Meme) {
+    return memeFiles(meme).map(({ publicId, resourceType, format }) => ({ publicId, resourceType, format }));
   }
 
   return {
@@ -137,7 +141,7 @@ export function createAdminService(deps: { storage: StorageService }): AdminServ
         await meme.save({ transaction });
         // Por último, para um erro na base não deixar o ficheiro público com o meme pendente.
         // Se o storage falhar, a transação desfaz-se e o meme continua pendente.
-        await storage.setVisibility(refOf(meme), 'private', 'public');
+        await setVisibilityAll(storage, refsOf(meme), 'private', 'public');
       });
       return load(id);
     },
@@ -154,9 +158,13 @@ export function createAdminService(deps: { storage: StorageService }): AdminServ
         return meme;
       });
       // O registo fica; o ficheiro apaga-se para não gastar quota. Uma falha aqui só deixa lixo.
-      await storage
-        .destroy({ ...refOf(meme), visibility: 'private' })
-        .catch((err) => console.error('Falha ao apagar ficheiro rejeitado', err));
+      await Promise.all(
+        refsOf(meme).map((ref) =>
+          storage
+            .destroy({ ...ref, visibility: 'private' })
+            .catch((err) => console.error('Falha ao apagar ficheiro rejeitado', err)),
+        ),
+      );
       return load(id);
     },
 
@@ -169,7 +177,7 @@ export function createAdminService(deps: { storage: StorageService }): AdminServ
         meme.reviewedAt = new Date();
         await meme.save({ transaction });
         // Deixa de ser público de imediato (com limpeza da cache da CDN).
-        await storage.setVisibility(refOf(meme), 'public', 'private');
+        await setVisibilityAll(storage, refsOf(meme), 'public', 'private');
       });
       return load(id);
     },

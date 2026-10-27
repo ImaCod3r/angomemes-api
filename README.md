@@ -137,6 +137,13 @@ envio ─▶ pending ┤
 2. O browser envia o ficheiro para o Cloudinary (`uploadUrl` + `fields`).
 3. `POST /memes/uploads/:ticketId { title, tags }`: a API pergunta ao Cloudinary o que chegou, confirma o formato e o tamanho do tipo (vídeo 50 MB, imagem 10 MB, áudio 5 MB) e cria o meme.
 
+**Coleções** (carrossel): pede-se um ticket por ficheiro, todos do mesmo tipo, e reclamam-se juntos com `POST /memes/uploads/collection { ticketIds, title, tags }` (2 a 10 ficheiros). O resultado é um só meme, com um título, as mesmas tags, um contador de likes e uma aprovação. A capa (o primeiro ficheiro) fica nas colunas de `memes` e os restantes em `meme_media`. Só as coleções trazem `media` nas respostas, com todos os ficheiros.
+
+Confirmar um ficheiro gasta a Admin API do Cloudinary, que tem quota por hora para a conta toda. Por isso:
+- Cada ticket só se confirma 3 vezes. Depois disso a API responde 429 `TOO_MANY_CHECKS` e é preciso enviar o ficheiro outra vez.
+- As rotas de reclamar aceitam 60 pedidos por hora por conta.
+- Os ficheiros de uma coleção confirmam-se 3 de cada vez.
+
 Os tickets não reclamados em 2 horas são apagados por uma limpeza que corre a cada 15 minutos. O envio clássico (`POST /memes`, multipart) continua a funcionar, com no máximo 4 envios em simultâneo por instância.
 
 ### Sessões
@@ -165,8 +172,8 @@ Os tickets não reclamados em 2 horas são apagados por uma limpeza que corre a 
 | `GET /memes/tags?type=` | público | Tags com memes publicados e a contagem. |
 | `GET /memes/sitemap` | público | Dados mínimos de todos os publicados, para o sitemap. |
 | `GET /memes/:slug` | público | Detalhe de um meme. |
-| `GET /memes/:slug/download` | público | Redireciona para a descarga com marca d'água. |
-| `POST /memes/uploads` · `POST /memes/uploads/:ticketId` | sessão | Envio direto (ticket · reclamar). |
+| `GET /memes/:slug/download?item=` | público | Redireciona para a descarga com marca d'água (`item`: o ficheiro da coleção, 0 é a capa). |
+| `POST /memes/uploads` · `POST /memes/uploads/:ticketId` · `POST /memes/uploads/collection` | sessão | Envio direto (ticket · reclamar · reclamar uma coleção). |
 | `POST /memes` | sessão | Envio clássico (multipart). |
 | `PUT` · `DELETE /memes/:id/like` | sessão | Dar · retirar like. |
 | `GET /me/likes?memeIds=` | sessão | Quais destes memes têm like da conta. |

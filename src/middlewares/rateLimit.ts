@@ -25,6 +25,22 @@ export const uploadRateLimit = rateLimit({
   },
 });
 
+/**
+ * Reclamar envios diretos, por conta. Cada pedido confirma até 10 ficheiros na Admin API do
+ * Cloudinary, que tem quota por hora para a conta toda. Depois do requireAuth.
+ */
+export const claimRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user!.id,
+  skip: () => env.NODE_ENV === 'test',
+  message: {
+    error: { code: 'RATE_LIMITED', message: 'Demasiadas tentativas de envio na última hora. Tenta mais tarde.' },
+  },
+});
+
 /** Por conta: chega para quem carrega no coração várias vezes, trava scripts. Depois do requireAuth. */
 export const likeRateLimit = rateLimit({
   windowMs: 60 * 1000,

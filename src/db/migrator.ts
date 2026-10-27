@@ -12,6 +12,8 @@ import * as addMemeRandomKey from './migrations/0009-add-meme-random-key.js';
 import * as createUploadTickets from './migrations/0010-create-upload-tickets.js';
 import * as searchNormalize from './migrations/0011-search-normalize.js';
 import * as addUserUsername from './migrations/0012-add-user-username.js';
+import * as createMemeMedia from './migrations/0013-create-meme-media.js';
+import * as collectionLimits from './migrations/0014-collection-limits.js';
 
 // Lista explícita em vez de glob: funciona igual com tsx (.ts) e depois do build (.js).
 export const migrator = new Umzug({
@@ -28,6 +30,8 @@ export const migrator = new Umzug({
     { name: '0010-create-upload-tickets', ...createUploadTickets },
     { name: '0011-search-normalize', ...searchNormalize },
     { name: '0012-add-user-username', ...addUserUsername },
+    { name: '0013-create-meme-media', ...createMemeMedia },
+    { name: '0014-collection-limits', ...collectionLimits },
   ],
   context: sequelize.getQueryInterface(),
   storage: new SequelizeStorage({ sequelize }),

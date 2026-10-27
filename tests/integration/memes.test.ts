@@ -87,5 +87,16 @@ describe('memes', () => {
       .post('/memes/uploads/7b0f4c1e-5d7a-4f3e-9a1b-2c3d4e5f6a7b')
       .send({ title: 'X', tags: ['kuduro'] });
     expect(claim.status).toBe(401);
+    const collection = await request(app)
+      .post('/memes/uploads/collection')
+      .send({ ticketIds: [], title: 'X', tags: ['kuduro'] });
+    expect(collection.status).toBe(401);
+  });
+
+  it('GET /memes/:slug/download com item inválido devolve 400 sem tocar na base', async () => {
+    for (const item of ['-1', 'abc', '1.5', '10']) {
+      const res = await request(app).get(`/memes/ya-mano/download?item=${item}`);
+      expect(res.status, `item=${item}`).toBe(400);
+    }
   });
 });

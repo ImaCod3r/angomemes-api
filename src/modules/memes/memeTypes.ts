@@ -39,6 +39,9 @@ export const MEME_TYPE_RULES: Record<MemeType, MemeTypeRule> = {
   },
 };
 
+/** Ficheiros numa coleção (o carrossel), contando com a capa. */
+export const MAX_MEDIA_PER_MEME = 10;
+
 /** Vídeos e imagens descarregados levam a marca d'água; os áudios não. */
 export function hasWatermark(type: MemeType): boolean {
   return type !== 'audio';

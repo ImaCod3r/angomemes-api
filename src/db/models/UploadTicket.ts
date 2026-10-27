@@ -23,6 +23,8 @@ export class UploadTicket extends Model<InferAttributes<UploadTicket>, InferCrea
   declare createdAt: CreationOptional<Date>;
   declare expiresAt: Date;
   declare claimedAt: CreationOptional<Date | null>;
+  /** Vezes que o ficheiro foi confirmado no storage; com um máximo, para não gastar a quota. */
+  declare checks: CreationOptional<number>;
 }
 
 export function initUploadTicket(sequelize: Sequelize) {
@@ -37,6 +39,7 @@ export function initUploadTicket(sequelize: Sequelize) {
       createdAt: DataTypes.DATE,
       expiresAt: { type: DataTypes.DATE, allowNull: false },
       claimedAt: { type: DataTypes.DATE, allowNull: true },
+      checks: { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 0 },
     },
     { sequelize, tableName: 'upload_tickets', underscored: true, updatedAt: false },
   );

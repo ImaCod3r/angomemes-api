@@ -8,7 +8,7 @@ import {
   UniqueConstraintError,
   type WhereOptions,
 } from 'sequelize';
-import { Meme, MemeTag, sequelize, Tag, UploadTicket, User } from '../../db/index.js';
+import { Meme, MemeMedia, MemeTag, sequelize, Tag, UploadTicket, User } from '../../db/index.js';
 import { escapeLike } from '../../db/like.js';
 import type { MemeType } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
@@ -18,7 +18,14 @@ import {
   type StorageService,
   type Visibility,
 } from '../../services/storage/StorageService.js';
-import { acceptedFormatsMessage, detectFormat, MEME_TYPE_RULES, tooLargeMessage } from './memeTypes.js';
+import {
+  acceptedFormatsMessage,
+  detectFormat,
+  MAX_MEDIA_PER_MEME,
+  MEME_TYPE_RULES,
+  tooLargeMessage,
+} from './memeTypes.js';
+import { setVisibilityAll } from './memeFiles.js';
 import { memeSlugBase, pickFreeSlug } from './slug.js';
 import { FUZZY_THRESHOLD, relevanceSql, searchTerms, searchWhere } from './search.js';
 import { type MemeSort, orderFor } from './sort.js';
@@ -41,6 +48,13 @@ export interface ListPublishedQuery {
    * Sem isto, `hasMore` sai de pedir um meme a mais.
    */
   withTotal?: boolean;
+  /** Carregar os ficheiros das coleções (`meme.media`): uma consulta a mais, só o site os mostra. */
+  withMedia?: boolean;
+}
+
+/** Para os que devolvem um meme: com os ficheiros da coleção ou só a capa. */
+export interface MediaOption {
+  withMedia?: boolean;
 }
 
 /** Tags nas sugestões da pesquisa. */
@@ -89,12 +103,20 @@ export interface ClaimUploadInput {
   tagNames: string[];
 }
 
+export interface ClaimUploadsInput {
+  user: User;
+  /** Pela ordem do carrossel: o primeiro é a capa. */
+  ticketIds: string[];
+  title: string;
+  tagNames: string[];
+}
+
 export interface MemesService {
   listPublished(query: ListPublishedQuery): Promise<PublishedPage>;
   /** Um meme publicado; qualquer outro estado dá 404, como se não existisse. */
   /** Inclui quem enviou (só os campos públicos). */
-  getPublishedBySlug(slug: string): Promise<Meme>;
-  getPublishedById(id: string): Promise<Meme>;
+  getPublishedBySlug(slug: string, options?: MediaOption): Promise<Meme>;
+  getPublishedById(id: string, options?: MediaOption): Promise<Meme>;
   /** Um meme publicado ao acaso (opcionalmente de um tipo e/ou tag); null se não houver nenhum. */
   randomPublished(filter: { type?: MemeType; tag?: string }): Promise<Meme | null>;
   /**
@@ -113,6 +135,8 @@ export interface MemesService {
   createUploadTicket(user: User, type: MemeType): Promise<DirectUploadTicket>;
   /** Depois do envio direto: confirma o ficheiro com o storage e cria o meme. */
   claimUpload(input: ClaimUploadInput): Promise<Meme>;
+  /** Coleção: vários envios diretos do mesmo tipo num só meme, com o carrossel pela ordem dada. */
+  claimUploads(input: ClaimUploadsInput): Promise<Meme>;
   /** Apaga os ficheiros de envios que expiraram sem ser reclamados. Devolve quantos. */
   sweepExpiredUploads(): Promise<number>;
 }
@@ -178,6 +202,29 @@ function uploadNotFound(): AppError {
   return new AppError(404, 'UPLOAD_NOT_FOUND', 'Envio não encontrado ou expirado. Envia o ficheiro outra vez.');
 }
 
+/** Vezes que o ficheiro de um ticket se confirma no storage antes de ser preciso enviá-lo outra vez. */
+const MAX_TICKET_CHECKS = 3;
+/** Ficheiros de uma coleção confirmados no storage ao mesmo tempo. */
+const STORAGE_CHECK_CONCURRENCY = 3;
+
+function tooManyChecks(): AppError {
+  return new AppError(429, 'TOO_MANY_CHECKS', 'Demasiadas tentativas para este envio. Envia o ficheiro outra vez.');
+}
+
+/** `fn` em cada item, no máximo `limit` ao mesmo tempo; os resultados ficam pela ordem dos itens. */
+async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]!);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 const SITEMAP_MAX_URLS = 50_000;
 
 /** As tags mudam pouco e a agregação percorre todas as ligações: guarda-se um minuto. */
@@ -189,13 +236,24 @@ interface SaveMemeInput {
   title: string;
   tags: { slug: string; name: string }[];
   stored: StoredFile;
+  /** Coleções: os ficheiros depois da capa (`stored`), pela ordem do carrossel. */
+  extra?: StoredFile[];
   published: boolean;
   /** Corre dentro da transação, antes do commit; se lançar, nada fica gravado. */
   beforeCommit?: (transaction: Transaction) => Promise<void>;
 }
 
 /** Grava o meme e as tags; repete se dois envios com o mesmo título escolherem o mesmo slug. */
-async function saveMeme({ user, type, title, tags, stored, published, beforeCommit }: SaveMemeInput): Promise<Meme> {
+async function saveMeme({
+  user,
+  type,
+  title,
+  tags,
+  stored,
+  extra = [],
+  published,
+  beforeCommit,
+}: SaveMemeInput): Promise<Meme> {
   const rule = MEME_TYPE_RULES[type];
   const save = () =>
     sequelize.transaction(async (transaction) => {
@@ -223,9 +281,24 @@ async function saveMeme({ user, type, title, tags, stored, published, beforeComm
         tagRows.map((tag) => ({ memeId: meme.id, tagId: tag.id })),
         { transaction },
       );
+      const media = await MemeMedia.bulkCreate(
+        extra.map((file, index) => ({
+          memeId: meme.id,
+          position: index + 1,
+          publicId: file.publicId,
+          resourceType: rule.resourceType,
+          format: file.format,
+          bytes: file.bytes,
+          durationMs: file.durationMs,
+          width: file.width,
+          height: file.height,
+        })),
+        { transaction },
+      );
       await beforeCommit?.(transaction);
 
       meme.tags = tagRows;
+      meme.media = media;
       return meme;
     });
 
@@ -236,6 +309,25 @@ async function saveMeme({ user, type, title, tags, stored, published, beforeComm
       if (!(err instanceof UniqueConstraintError) || attempt >= SLUG_ATTEMPTS) throw err;
     }
   }
+}
+
+/**
+ * Junta a cada meme os ficheiros da coleção, numa só consulta.
+ * Separado do findAll porque um include hasMany com limit/offset obrigaria a uma subconsulta.
+ */
+async function attachMedia(memes: Meme[]): Promise<void> {
+  if (memes.length === 0) return;
+  const rows = await MemeMedia.findAll({
+    where: { memeId: memes.map((meme) => meme.id) },
+    order: [['memeId', 'ASC'], ['position', 'ASC']],
+  });
+  const byMeme = new Map<string, MemeMedia[]>();
+  for (const row of rows) {
+    const list = byMeme.get(row.memeId) ?? [];
+    list.push(row);
+    byMeme.set(row.memeId, list);
+  }
+  for (const meme of memes) meme.media = byMeme.get(meme.id) ?? [];
 }
 
 export function memeNotFound(): AppError {
@@ -260,7 +352,18 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
   }
 
   return {
-    async listPublished({ type, q, tag, uploader, sort, seed = 0, page, limit, withTotal = false }) {
+    async listPublished({
+      type,
+      q,
+      tag,
+      uploader,
+      sort,
+      seed = 0,
+      page,
+      limit,
+      withTotal = false,
+      withMedia = false,
+    }) {
       // Só `published`: pendentes, rejeitados e removidos nunca saem daqui.
       const conditions: WhereOptions<Meme>[] = [{ status: 'published' }];
       if (type) conditions.push({ type });
@@ -291,16 +394,19 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
         withTotal ? Meme.count({ where }) : undefined,
       ]);
 
-      return { items: rows.slice(0, limit), page, limit, total, hasMore: rows.length > limit };
+      const items = rows.slice(0, limit);
+      if (withMedia) await attachMedia(items);
+      return { items, page, limit, total, hasMore: rows.length > limit };
     },
 
-    async getPublishedById(id) {
+    async getPublishedById(id, { withMedia = false } = {}) {
       const meme = await Meme.findOne({
         where: { id, status: 'published' },
         include: [{ model: Tag, as: 'tags', through: { attributes: [] } }],
         order: [[{ model: Tag, as: 'tags' }, 'name', 'ASC']],
       });
       if (!meme) throw memeNotFound();
+      if (withMedia) await attachMedia([meme]);
       return meme;
     },
 
@@ -384,7 +490,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       );
     },
 
-    async getPublishedBySlug(slug) {
+    async getPublishedBySlug(slug, { withMedia = false } = {}) {
       const meme = await Meme.findOne({
         where: { slug, status: 'published' },
         include: [
@@ -395,6 +501,7 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
         order: [[{ model: Tag, as: 'tags' }, 'name', 'ASC']],
       });
       if (!meme) throw memeNotFound();
+      if (withMedia) await attachMedia([meme]);
       return meme;
     },
 
@@ -468,60 +575,108 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       };
     },
 
-    async claimUpload({ user, ticketId, title, tagNames }) {
-      const tags = validatedTags(tagNames);
-      // Só os tickets da própria pessoa: um de outra conta "não existe".
-      const ticket = await UploadTicket.findOne({
-        where: { id: ticketId, userId: user.id, claimedAt: null, expiresAt: { [Op.gt]: new Date() } },
-      });
-      if (!ticket) throw uploadNotFound();
+    claimUpload({ ticketId, ...rest }) {
+      return this.claimUploads({ ...rest, ticketIds: [ticketId] });
+    },
 
-      const rule = MEME_TYPE_RULES[ticket.type];
-      // Os dados vêm do próprio storage, nunca do browser.
-      const stored = await storage.getUploaded({
-        publicId: ticket.publicId,
-        resourceType: ticket.resourceType,
-        visibility: ticket.visibility,
+    async claimUploads({ user, ticketIds, title, tagNames }) {
+      const tags = validatedTags(tagNames);
+      if (ticketIds.length === 0 || new Set(ticketIds).size !== ticketIds.length) {
+        throw new AppError(400, 'INVALID_TICKETS', 'Lista de envios inválida.');
+      }
+      if (ticketIds.length > MAX_MEDIA_PER_MEME) {
+        throw new AppError(400, 'TOO_MANY_FILES', `No máximo ${MAX_MEDIA_PER_MEME} ficheiros por coleção.`);
+      }
+      // Só os tickets da própria pessoa: um de outra conta "não existe".
+      const found = await UploadTicket.findAll({
+        where: { id: ticketIds, userId: user.id, claimedAt: null, expiresAt: { [Op.gt]: new Date() } },
       });
-      if (!stored) {
+      if (found.length !== ticketIds.length) throw uploadNotFound();
+      const byId = new Map(found.map((ticket) => [ticket.id, ticket]));
+      const tickets = ticketIds.map((id) => byId.get(id)!);
+
+      const type = tickets[0]!.type;
+      if (tickets.some((ticket) => ticket.type !== type)) {
+        throw new AppError(400, 'MIXED_TYPES', 'Os ficheiros de uma coleção têm de ser todos do mesmo tipo.');
+      }
+      const rule = MEME_TYPE_RULES[type];
+
+      // Confirmar no storage gasta a Admin API do Cloudinary, com quota por hora para a conta
+      // toda: cada ticket só se confirma MAX_TICKET_CHECKS vezes. A contagem sobe numa só
+      // instrução e só nos que ainda têm tentativas, para pedidos ao mesmo tempo não passarem.
+      if (tickets.some((ticket) => ticket.checks >= MAX_TICKET_CHECKS)) throw tooManyChecks();
+      const [counted] = await UploadTicket.update(
+        { checks: literal('checks + 1') as unknown as number },
+        { where: { id: ticketIds, checks: { [Op.lt]: MAX_TICKET_CHECKS } } },
+      );
+      if (counted !== ticketIds.length) throw tooManyChecks();
+
+      // Os dados vêm do próprio storage, nunca do browser. Poucos de cada vez, para uma
+      // coleção não abrir 10 ligações ao mesmo tempo.
+      const stored = await mapLimit(tickets, STORAGE_CHECK_CONCURRENCY, (ticket) =>
+        storage.getUploaded({
+          publicId: ticket.publicId,
+          resourceType: ticket.resourceType,
+          visibility: ticket.visibility,
+        }),
+      );
+      if (stored.some((file) => !file)) {
         throw new AppError(409, 'UPLOAD_NOT_RECEIVED', 'O ficheiro ainda não chegou. Espera que o envio termine.');
       }
-      const ref = { publicId: stored.publicId, resourceType: ticket.resourceType, format: stored.format };
+      const files = stored as StoredFile[];
+      const refOf = (index: number) => ({
+        publicId: files[index]!.publicId,
+        resourceType: tickets[index]!.resourceType,
+        format: files[index]!.format,
+      });
 
       // O storage não sabe limitar o tamanho por tipo: confirma-se aqui e apaga-se o que passar.
-      const badFormat = !rule.cloudinaryFormats.includes(stored.format);
-      if (badFormat || (stored.bytes ?? 0) > rule.maxBytes) {
+      // Os outros ficheiros continuam por reclamar e a limpeza apaga-os se não voltarem.
+      let refusal: AppError | null = null;
+      for (const [index, file] of files.entries()) {
+        const badFormat = !rule.cloudinaryFormats.includes(file.format);
+        if (!badFormat && (file.bytes ?? 0) <= rule.maxBytes) continue;
+        const ticket = tickets[index]!;
         await storage
-          .destroy({ ...ref, visibility: ticket.visibility })
+          .destroy({ ...refOf(index), visibility: ticket.visibility })
           .catch((err) => console.error('Falha ao apagar envio recusado', err));
         await ticket.destroy();
-        throw badFormat
-          ? new AppError(415, 'UNSUPPORTED_FORMAT', acceptedFormatsMessage(ticket.type))
-          : new AppError(413, 'FILE_TOO_LARGE', tooLargeMessage(ticket.type));
+        refusal ??= badFormat
+          ? new AppError(415, 'UNSUPPORTED_FORMAT', acceptedFormatsMessage(type))
+          : new AppError(413, 'FILE_TOO_LARGE', tooLargeMessage(type));
+      }
+      if (refusal) throw refusal;
+
+      // Quem deixou de ser admin desde que pediu os tickets já não publica direto.
+      const published = user.role === 'admin' && tickets.every((ticket) => ticket.visibility === 'public');
+      if (!published) {
+        const publicOnes = [...tickets.keys()].filter((index) => tickets[index]!.visibility === 'public');
+        if (publicOnes.length > 0) {
+          // Todos ou nenhum: se um falhar, os outros voltam a públicos e o ticket fica igual.
+          await setVisibilityAll(storage, publicOnes.map(refOf), 'public', 'private');
+          await UploadTicket.update(
+            { visibility: 'private' },
+            { where: { id: publicOnes.map((index) => tickets[index]!.id) } },
+          );
+        }
       }
 
-      // Quem deixou de ser admin desde que pediu o ticket já não publica direto.
-      const published = ticket.visibility === 'public' && user.role === 'admin';
-      if (ticket.visibility === 'public' && !published) {
-        await storage.setVisibility(ref, 'public', 'private');
-        await ticket.update({ visibility: 'private' });
-      }
-
-      // Se a gravação falhar, o ticket continua por reclamar e a limpeza apaga o ficheiro.
+      // Se a gravação falhar, os tickets continuam por reclamar e a limpeza apaga os ficheiros.
       return saveMeme({
         user,
-        type: ticket.type,
+        type,
         title,
         tags,
-        stored,
+        stored: files[0]!,
+        extra: files.slice(1),
         published,
-        // Na mesma transação: dois pedidos ao mesmo tempo com o mesmo ticket criam um só meme.
+        // Na mesma transação: dois pedidos ao mesmo tempo com os mesmos tickets criam um só meme.
         async beforeCommit(transaction) {
           const [claimed] = await UploadTicket.update(
             { claimedAt: new Date() },
-            { where: { id: ticket.id, claimedAt: null }, transaction },
+            { where: { id: ticketIds, claimedAt: null }, transaction },
           );
-          if (claimed === 0) throw uploadNotFound();
+          if (claimed !== ticketIds.length) throw uploadNotFound();
         },
       });
     },

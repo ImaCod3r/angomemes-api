@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { ApiKey, initApiKey } from './models/ApiKey.js';
 import { initLike, Like } from './models/Like.js';
 import { initMeme, Meme } from './models/Meme.js';
+import { initMemeMedia, MemeMedia } from './models/MemeMedia.js';
 import { initMemeTag, MemeTag } from './models/MemeTag.js';
 import { initTag, Tag } from './models/Tag.js';
 import { initUploadTicket, UploadTicket } from './models/UploadTicket.js';
@@ -22,11 +23,13 @@ initMemeTag(sequelize);
 initApiKey(sequelize);
 initLike(sequelize);
 initUploadTicket(sequelize);
+initMemeMedia(sequelize);
 
 Meme.belongsTo(User, { as: 'uploader', foreignKey: 'uploadedBy' });
+Meme.hasMany(MemeMedia, { as: 'media', foreignKey: 'memeId' });
 Meme.belongsToMany(Tag, { through: MemeTag, as: 'tags', foreignKey: 'memeId', otherKey: 'tagId' });
 Tag.belongsToMany(Meme, { through: MemeTag, as: 'memes', foreignKey: 'tagId', otherKey: 'memeId' });
 
 ApiKey.belongsTo(User, { as: 'user', foreignKey: 'userId' });
 
-export { ApiKey, Like, Meme, MemeTag, Tag, UploadTicket, User };
+export { ApiKey, Like, Meme, MemeMedia, MemeTag, Tag, UploadTicket, User };

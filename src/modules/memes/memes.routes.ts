@@ -5,13 +5,14 @@ import { MEME_TYPES } from '../../db/models/Meme.js';
 import { AppError } from '../../errors.js';
 import { requireAuth } from '../../middlewares/auth.js';
 import { concurrencyLimit } from '../../middlewares/concurrency.js';
-import { createDownloadCountLimit, uploadRateLimit } from '../../middlewares/rateLimit.js';
+import { claimRateLimit, createDownloadCountLimit, uploadRateLimit } from '../../middlewares/rateLimit.js';
 import { uploadMemeFile } from '../../middlewares/upload.js';
 import type { StorageService } from '../../services/storage/StorageService.js';
 import type { LikesService } from '../likes/likes.service.js';
 import { USERNAME_MAX } from '../users/username.js';
 import { toMemeDetailDto, toMemeDto, toUploadedMemeDto } from './meme.dto.js';
-import { hasWatermark } from './memeTypes.js';
+import { memeFiles } from './memeFiles.js';
+import { hasWatermark, MAX_MEDIA_PER_MEME } from './memeTypes.js';
 import { MAX_PAGE, memeNotFound, type MemesService } from './memes.service.js';
 import { MEME_SLUG_MAX, MEME_SLUG_PATTERN } from './slug.js';
 import { MEME_SORTS, RANDOM_SEED_MAX } from './sort.js';
@@ -62,6 +63,20 @@ const ticketBody = z.object({ type: z.enum(MEME_TYPES) });
 
 const claimBody = uploadBody.omit({ type: true });
 
+const collectionBody = claimBody.extend({
+  // Pela ordem do carrossel: o primeiro é a capa.
+  ticketIds: z
+    .array(z.uuid())
+    .min(2, 'Uma coleção tem pelo menos 2 ficheiros.')
+    .max(MAX_MEDIA_PER_MEME, `No máximo ${MAX_MEDIA_PER_MEME} ficheiros por coleção.`)
+    .refine((ids) => new Set(ids).size === ids.length, 'Ficheiros repetidos.'),
+});
+
+const downloadQuery = z.object({
+  // Coleções: qual dos ficheiros (0 é a capa).
+  item: z.coerce.number().int().min(0).max(MAX_MEDIA_PER_MEME - 1).default(0),
+});
+
 /** Um slug com formato impossível nunca existe: 404 sem ir à base. */
 function parseMemeSlug(slug: unknown): string {
   if (typeof slug !== 'string' || slug.length > MEME_SLUG_MAX || !MEME_SLUG_PATTERN.test(slug)) throw memeNotFound();
@@ -85,7 +100,7 @@ export function createMemesRouter(deps: {
 
   router.get('/', async (req, res) => {
     const query = listQuery.parse(req.query);
-    const page = await memesService.listPublished(query);
+    const page = await memesService.listPublished({ ...query, withMedia: true });
     const liked = await likedBy(req.user, page.items.map((meme) => meme.id));
     res.json({ ...page, items: page.items.map((meme) => toMemeDto(meme, storage, liked.has(meme.id))) });
   });
@@ -151,17 +166,24 @@ export function createMemesRouter(deps: {
   });
 
   router.get('/:slug', async (req, res) => {
-    const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug));
+    const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug), { withMedia: true });
     const liked = await likedBy(req.user, [meme.id]);
     res.json({ meme: toMemeDetailDto(meme, storage, liked.has(meme.id)) });
   });
 
   router.get('/:slug/download', downloadCountLimit, async (req, res) => {
-    const meme = await memesService.getPublishedBySlug(parseMemeSlug(req.params.slug));
-    const ref = { publicId: meme.publicId, resourceType: meme.resourceType, format: meme.format };
+    const slug = parseMemeSlug(req.params.slug);
+    const { item } = downloadQuery.parse(req.query);
+    const meme = await memesService.getPublishedBySlug(slug, { withMedia: item > 0 });
+    const files = memeFiles(meme);
+    const file = files[item];
+    if (!file) throw memeNotFound();
+    const ref = { publicId: file.publicId, resourceType: file.resourceType, format: file.format };
+    // Numa coleção cada ficheiro tem o seu nome: ya-mano-1, ya-mano-2…
+    const filename = files.length > 1 ? `${meme.slug}-${item + 1}` : meme.slug;
     // Sem esperar: a descarga não fica à espera da contagem.
     if (!res.locals.skipDownloadCount) void memesService.countDownload(meme);
-    res.redirect(302, storage.downloadUrl(ref, meme.slug, { watermark: hasWatermark(meme.type) }));
+    res.redirect(302, storage.downloadUrl(ref, filename, { watermark: hasWatermark(meme.type) }));
   });
 
   router.post('/', requireAuth, uploadRateLimit, uploadSlots, uploadMemeFile, async (req, res) => {
@@ -187,7 +209,19 @@ export function createMemesRouter(deps: {
     res.status(201).json(await memesService.createUploadTicket(req.user!, type));
   });
 
-  router.post('/uploads/:ticketId', requireAuth, async (req, res) => {
+  // Coleção: vários envios diretos do mesmo tipo num só meme. Antes de /uploads/:ticketId.
+  router.post('/uploads/collection', requireAuth, claimRateLimit, async (req, res) => {
+    const body = collectionBody.parse(req.body);
+    const meme = await memesService.claimUploads({
+      user: req.user!,
+      ticketIds: body.ticketIds,
+      title: body.title,
+      tagNames: body.tags,
+    });
+    res.status(201).json({ meme: toUploadedMemeDto(meme, storage) });
+  });
+
+  router.post('/uploads/:ticketId', requireAuth, claimRateLimit, async (req, res) => {
     const ticketId = z.uuid().safeParse(req.params.ticketId);
     if (!ticketId.success) throw new AppError(404, 'UPLOAD_NOT_FOUND', 'Envio não encontrado ou expirado.');
     const body = claimBody.parse(req.body);

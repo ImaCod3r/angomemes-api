@@ -7,6 +7,7 @@ import {
   type NonAttribute,
   type Sequelize,
 } from 'sequelize';
+import type { MemeMedia } from './MemeMedia.js';
 import type { Tag } from './Tag.js';
 import type { User } from './User.js';
 
@@ -47,6 +48,8 @@ export class Meme extends Model<InferAttributes<Meme>, InferCreationAttributes<M
 
   declare tags?: NonAttribute<Tag[]>;
   declare uploader?: NonAttribute<User>;
+  /** Coleções: os ficheiros depois da capa, por `position`. Vazio ou por carregar num meme simples. */
+  declare media?: NonAttribute<MemeMedia[]>;
 }
 
 export function initMeme(sequelize: Sequelize) {
