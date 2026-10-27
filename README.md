@@ -170,6 +170,7 @@ Os tickets não reclamados em 2 horas são apagados por uma limpeza que corre a 
 | `POST /auth/logout` · `POST /auth/logout-all` | sessão | Sair neste aparelho · em todos. |
 | `GET /memes` | público | Listagem (`type`, `q`, `tag`, `sort`, `seed`, `page`, `limit`). |
 | `GET /memes/tags?type=` | público | Tags com memes publicados e a contagem. |
+| `GET /memes/feed?seed=&page=&limit=&exclude=` | público (pessoal com sessão) | Feed vertical "Para ti", só vídeos. A ordem e os pesos estão descritos em `src/modules/memes/forYou.ts`. |
 | `GET /memes/sitemap` | público | Dados mínimos de todos os publicados, para o sitemap. |
 | `GET /memes/:slug` | público | Detalhe de um meme. |
 | `GET /memes/:slug/download?item=` | público | Redireciona para a descarga com marca d'água (`item`: o ficheiro da coleção, 0 é a capa). |

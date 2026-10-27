@@ -93,6 +93,13 @@ describe('memes', () => {
     expect(collection.status).toBe(401);
   });
 
+  it('GET /memes/feed com parâmetros inválidos devolve 400 sem tocar na base', async () => {
+    for (const qs of ['seed=-1', 'seed=abc', 'page=0', 'limit=21', 'limit=0', 'exclude=nao-e-uuid']) {
+      const res = await request(app).get(`/memes/feed?${qs}`);
+      expect(res.status, qs).toBe(400);
+    }
+  });
+
   it('GET /memes/:slug/download com item inválido devolve 400 sem tocar na base', async () => {
     for (const item of ['-1', 'abc', '1.5', '10']) {
       const res = await request(app).get(`/memes/ya-mano/download?item=${item}`);

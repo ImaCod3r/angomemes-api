@@ -25,6 +25,7 @@ import {
   MEME_TYPE_RULES,
   tooLargeMessage,
 } from './memeTypes.js';
+import { FOR_YOU_SQL, spreadByUploader } from './forYou.js';
 import { setVisibilityAll } from './memeFiles.js';
 import { memeSlugBase, pickFreeSlug } from './slug.js';
 import { FUZZY_THRESHOLD, relevanceSql, searchTerms, searchWhere } from './search.js';
@@ -50,6 +51,17 @@ export interface ListPublishedQuery {
   withTotal?: boolean;
   /** Carregar os ficheiros das coleções (`meme.media`): uma consulta a mais, só o site os mostra. */
   withMedia?: boolean;
+}
+
+export interface ForYouQuery {
+  /** Com sessão, o feed segue as tags dos memes a que a conta deu like. */
+  userId?: string;
+  /** Uma por sessão: a mesma semente dá a mesma ordem, e "mais" não repete vídeos. */
+  seed: number;
+  page: number;
+  limit: number;
+  /** O vídeo por onde o feed começou (já está no ecrã). */
+  exclude?: string;
 }
 
 /** Para os que devolvem um meme: com os ficheiros da coleção ou só a capa. */
@@ -113,6 +125,8 @@ export interface ClaimUploadsInput {
 
 export interface MemesService {
   listPublished(query: ListPublishedQuery): Promise<PublishedPage>;
+  /** Feed vertical "Para ti": só vídeos, pela pontuação de `forYou.ts`. */
+  forYou(query: ForYouQuery): Promise<PublishedPage>;
   /** Um meme publicado; qualquer outro estado dá 404, como se não existisse. */
   /** Inclui quem enviou (só os campos públicos). */
   getPublishedBySlug(slug: string, options?: MediaOption): Promise<Meme>;
@@ -397,6 +411,34 @@ export function createMemesService(deps: { storage: StorageService }): MemesServ
       const items = rows.slice(0, limit);
       if (withMedia) await attachMedia(items);
       return { items, page, limit, total, hasMore: rows.length > limit };
+    },
+
+    async forYou({ userId, seed, page, limit, exclude }) {
+      // A ordem sai do SQL (ids); depois carregam-se os memes com as tags.
+      const rows = await sequelize.query<{ id: string }>(FOR_YOU_SQL, {
+        type: QueryTypes.SELECT,
+        replacements: {
+          userId: userId ?? null,
+          exclude: exclude ?? null,
+          seed: String(seed),
+          // Um a mais para saber se há página seguinte.
+          limit: limit + 1,
+          offset: (page - 1) * limit,
+        },
+      });
+      const ids = rows.slice(0, limit).map((row) => row.id);
+      const memes = ids.length
+        ? await Meme.findAll({
+            where: { id: ids, status: 'published' },
+            include: [{ model: Tag, as: 'tags', through: { attributes: [] } }],
+            order: [[{ model: Tag, as: 'tags' }, 'name', 'ASC']],
+          })
+        : [];
+      const byId = new Map(memes.map((meme) => [meme.id, meme]));
+      // Pode ter deixado de estar publicado entre as duas consultas: fica de fora.
+      const ordered = ids.flatMap((id) => byId.get(id) ?? []);
+      await attachMedia(ordered);
+      return { items: spreadByUploader(ordered), page, limit, hasMore: rows.length > limit };
     },
 
     async getPublishedById(id, { withMedia = false } = {}) {

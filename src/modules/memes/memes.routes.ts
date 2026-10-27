@@ -19,6 +19,7 @@ import { MEME_SORTS, RANDOM_SEED_MAX } from './sort.js';
 import { MAX_TAGS_PER_MEME, TAG_MAX_LENGTH } from './tags.js';
 
 const MAX_PAGE_SIZE = 50;
+const MAX_FEED_PAGE_SIZE = 20;
 /** Com menos letras as sugestões seriam quase todos os memes. */
 const MIN_SUGGESTION_LENGTH = 2;
 const MAX_SUGGESTED_MEMES = 8;
@@ -107,6 +108,14 @@ export function createMemesRouter(deps: {
 
   const tagsQuery = z.object({ type: z.enum(MEME_TYPES).optional() });
 
+  const feedQuery = z.object({
+    seed: z.coerce.number().int().min(0).max(RANDOM_SEED_MAX).default(0),
+    page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
+    // Páginas pequenas: cada vídeo ocupa o ecrã inteiro.
+    limit: z.coerce.number().int().min(1).max(MAX_FEED_PAGE_SIZE).default(8),
+    exclude: z.uuid().optional(),
+  });
+
   const suggestionsQuery = z.object({
     q: z.string().trim().max(100).default(''),
     type: z.enum(MEME_TYPES).optional(),
@@ -163,6 +172,16 @@ export function createMemesRouter(deps: {
     const { type } = tagsQuery.parse(req.query);
     res.set('Cache-Control', 'public, max-age=60');
     res.json({ items: await memesService.listPublicTags(type) });
+  });
+
+  // Feed vertical "Para ti" (só vídeos). Também antes de /:slug.
+  router.get('/feed', async (req, res) => {
+    const query = feedQuery.parse(req.query);
+    const page = await memesService.forYou({ ...query, userId: req.user?.id });
+    const liked = await likedBy(req.user, page.items.map((meme) => meme.id));
+    // Com sessão o feed é pessoal: nada de caches partilhadas.
+    res.set('Cache-Control', req.user ? 'private, no-store' : 'public, max-age=60');
+    res.json({ ...page, items: page.items.map((meme) => toMemeDto(meme, storage, liked.has(meme.id))) });
   });
 
   router.get('/:slug', async (req, res) => {
