@@ -17,6 +17,8 @@ import { createLikesRouter } from './modules/likes/likes.routes.js';
 import { createLikesService } from './modules/likes/likes.service.js';
 import { createMemesRouter } from './modules/memes/memes.routes.js';
 import { createMemesService } from './modules/memes/memes.service.js';
+import { createNotificationsRouter } from './modules/notifications/notifications.routes.js';
+import { createPushService } from './modules/notifications/push.service.js';
 import { createApiKeysService } from './modules/publicApi/apiKeys.service.js';
 import { createMeRouter } from './modules/publicApi/me.routes.js';
 import { buildOpenApiSpec } from './modules/publicApi/openapi.js';
@@ -90,8 +92,9 @@ export function createApp(deps: AppDeps) {
   app.use('/memes', createMemesRouter({ memesService, likesService, storage: deps.storage }));
   app.use('/memes', createLikesRouter({ likesService }));
   app.use('/users', createUsersRouter({ profilesService: createProfilesService() }));
+  app.use('/notifications', createNotificationsRouter());
 
-  const adminService = createAdminService({ storage: deps.storage });
+  const adminService = createAdminService({ storage: deps.storage, push: createPushService() });
   const usersService = createUsersService({ adminEmails: env.ADMIN_EMAILS });
   app.use('/admin', createAdminRouter({ adminService, usersService, storage: deps.storage }));
 

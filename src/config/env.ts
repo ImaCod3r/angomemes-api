@@ -33,6 +33,9 @@ const envSchema = z.object({
   CLOUDINARY_URL: z
     .string()
     .regex(/^cloudinary:\/\/[^:]+:[^@]+@.+$/, 'formato: cloudinary://<api_key>:<api_secret>@<cloud_name>'),
+  VAPID_PUBLIC_KEY: z.string().default(''),
+  VAPID_PRIVATE_KEY: z.string().default(''),
+  VAPID_SUBJECT: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

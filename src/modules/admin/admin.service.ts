@@ -7,6 +7,7 @@ import type { StorageService } from '../../services/storage/StorageService.js';
 import { memeFiles, setVisibilityAll } from '../memes/memeFiles.js';
 import { assertTransition } from '../memes/memeStatus.js';
 import { type Page, upsertTags, validatedTags } from '../memes/memes.service.js';
+import type { PushService } from '../notifications/push.service.js';
 
 export interface AdminListQuery {
   status: MemeStatus;
@@ -45,8 +46,8 @@ function notFound(): AppError {
   return new AppError(404, 'MEME_NOT_FOUND', 'Meme não encontrado.');
 }
 
-export function createAdminService(deps: { storage: StorageService }): AdminService {
-  const { storage } = deps;
+export function createAdminService(deps: { storage: StorageService; push: PushService }): AdminService {
+  const { storage, push } = deps;
 
   async function load(id: string, transaction?: Transaction): Promise<Meme> {
     if (transaction) {
@@ -143,7 +144,11 @@ export function createAdminService(deps: { storage: StorageService }): AdminServ
         // Se o storage falhar, a transação desfaz-se e o meme continua pendente.
         await setVisibilityAll(storage, refsOf(meme), 'private', 'public');
       });
-      return load(id);
+      const published = await load(id);
+      void push
+        .notifyNewMeme({ title: published.title, url: `/memes/${published.slug}` })
+        .catch((err) => console.error('Falha ao enviar notificações de novo meme', err));
+      return published;
     },
 
     async reject(id, reviewer, reason) {
