@@ -1,4 +1,4 @@
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 import { PushSubscription } from '../../db/index.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../logger.js';
