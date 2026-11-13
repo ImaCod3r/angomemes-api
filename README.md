@@ -127,7 +127,7 @@ envio ─▶ pending ┤
 
 - O que um **administrador** envia entra logo como `published`.
 - Só os `published` aparecem em listagens, pesquisas, descargas e na API pública; os outros estados dão 404 como se não existissem.
-- Os ficheiros **pendentes e removidos** ficam no Cloudinary com entrega `authenticated` (privada). O painel vê-os por URLs temporários (1 hora).
+- Os ficheiros **pendentes e removidos** ficam no Cloudinary com entrega `authenticated` (privada). O painel vê-os por URLs assinados da CDN (`res.cloudinary.com`), que funcionam com o CSP do site e tocam no telemóvel; deixam de abrir quando o meme é aprovado ou o ficheiro apagado.
 - Aprovar e remover mudam o tipo de entrega do ficheiro no Cloudinary, sem o reenviar, e limpam a cache da CDN.
 - As transições usam `SELECT … FOR UPDATE`: dois administradores ao mesmo tempo não aprovam e rejeitam o mesmo meme.
 

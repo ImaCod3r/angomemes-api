@@ -20,7 +20,7 @@ export function toAdminMemeDto(meme: Meme, storage: StorageService) {
     uploader: meme.uploader
       ? { id: meme.uploader.id, name: meme.uploader.name, email: meme.uploader.email }
       : null,
-    // Pendentes e removidos só por URL temporário; os rejeitados já não têm ficheiro.
+    // Pendentes e removidos só por URL privado assinado; os rejeitados já não têm ficheiro.
     previewUrl: visibility === null ? null : isPublic ? storage.fileUrl(ref) : storage.privateUrl(ref),
     /** Coleções: todos os ficheiros, a capa primeiro, para rever o carrossel inteiro. */
     media:

@@ -32,7 +32,6 @@ const WATERMARK_LAYER = [
 
 /** Segundos do excerto de pré-visualização dos vídeos. */
 const HOVER_PREVIEW_SECONDS = 4;
-const PRIVATE_URL_TTL_SECONDS = 60 * 60;
 
 const deliveryType = (visibility: Visibility) => (visibility === 'public' ? 'upload' : 'authenticated');
 
@@ -180,11 +179,16 @@ export class CloudinaryStorageService implements StorageService {
   }
 
   privateUrl(file: FileRef): string {
-    // URL de descarga privada da API, que expira; não depende do plano ter token auth.
-    return cloudinary.utils.private_download_url(file.publicId, file.format, {
+    // URL assinado na CDN (res.cloudinary.com), como os públicos: o CSP do site deixa-o
+    // carregar e o Safari do iPhone toca-o (pedidos por partes). O private_download_url
+    // da API ficava bloqueado pelo CSP e não serve para ver vídeos.
+    // Não expira (expirar pediria token auth, que o plano não tem), mas só chega a
+    // administradores e deixa de funcionar quando o meme é aprovado ou o ficheiro apagado.
+    return cloudinary.url(file.publicId, {
+      ...SIGNED,
       resource_type: file.resourceType,
       type: 'authenticated',
-      expires_at: Math.floor(Date.now() / 1000) + PRIVATE_URL_TTL_SECONDS,
+      format: file.format,
     });
   }
 

@@ -66,7 +66,7 @@ export interface StorageService {
   hoverPreviewUrl(file: FileRef): string;
   /** Passa o ficheiro entre público (CDN) e privado, sem o reenviar, e limpa a cache da CDN. */
   setVisibility(file: FileRef, from: Visibility, to: Visibility): Promise<void>;
-  /** URL temporário para ver um ficheiro privado; só se entrega a administradores. */
+  /** URL assinado para ver um ficheiro privado; só se entrega a administradores. */
   privateUrl(file: FileRef): string;
 }
 
