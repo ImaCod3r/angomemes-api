@@ -16,7 +16,6 @@ export function createNotificationsRouter() {
   router.post('/push-subscriptions', async (req, res) => {
     const body = subscriptionBody.parse(req.body);
     await PushSubscription.upsert({
-      userId: req.user?.id ?? null,
       endpoint: body.endpoint,
       p256dh: body.keys.p256dh,
       auth: body.keys.auth,
@@ -27,7 +26,7 @@ export function createNotificationsRouter() {
   router.delete('/push-subscriptions', async (req, res) => {
     const body = z.object({ endpoint: z.url().max(2048) }).parse(req.body);
     await PushSubscription.destroy({
-      where: { userId: req.user?.id ?? null, endpoint: body.endpoint },
+      where: { endpoint: body.endpoint },
     });
     res.status(204).end();
   });

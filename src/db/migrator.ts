@@ -15,6 +15,7 @@ import * as addUserUsername from './migrations/0012-add-user-username.js';
 import * as createMemeMedia from './migrations/0013-create-meme-media.js';
 import * as collectionLimits from './migrations/0014-collection-limits.js';
 import * as createPushSubscriptions from './migrations/0015-create-push-subscriptions.js';
+import * as removePushSubscriptionUser from './migrations/0016-remove-push-subscription-user.js';
 
 // Lista explícita em vez de glob: funciona igual com tsx (.ts) e depois do build (.js).
 export const migrator = new Umzug({
@@ -34,6 +35,7 @@ export const migrator = new Umzug({
     { name: '0013-create-meme-media', ...createMemeMedia },
     { name: '0014-collection-limits', ...collectionLimits },
     { name: '0015-create-push-subscriptions', ...createPushSubscriptions },
+    { name: '0016-remove-push-subscription-user', ...removePushSubscriptionUser },
   ],
   context: sequelize.getQueryInterface(),
   storage: new SequelizeStorage({ sequelize }),
